@@ -1,0 +1,116 @@
+version: "3.9"
+
+services:
+  # ===========================
+  # Host h1
+  # ===========================
+  h1:
+    build: ./host
+    container_name: h1
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    networks:
+      R1h1br:
+        ipv4_address: 172.18.0.3
+    command: >
+      sh -c "
+        ip route del default || true &&
+        ip route add default via 172.18.0.2 &&
+        tail -f /dev/null
+      "
+
+  # ===========================
+  # Host h2
+  # ===========================
+  h2:
+    build: ./host
+    container_name: h2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    networks:
+      R2h2br:
+        ipv4_address: 172.19.0.3
+    command: >
+      sh -c "
+        ip route del default || true &&
+        ip route add default via 172.19.0.2 &&
+        tail -f /dev/null
+      "
+
+  # ===========================
+  # Router R1
+  # ===========================
+  R1:
+    image: frrouting/frr-debian
+    container_name: R1
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      R1h1br:
+        ipv4_address: 172.18.0.2
+      R1R2br:
+        ipv4_address: 172.20.0.2
+    volumes:
+      - ./config/R1/frr.conf:/etc/frr/frr.conf:ro
+      - ./config/daemons:/etc/frr/daemons
+    command: >
+      bash -c "
+        /usr/lib/frr/frrinit.sh start &&
+        tail -f /dev/null
+      "
+
+  # ===========================
+  # Router R2
+  # ===========================
+  R2:
+    image: frrouting/frr-debian
+    container_name: R2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=1
+    networks:
+      R2h2br:
+        ipv4_address: 172.19.0.2     
+      R1R2br:
+        ipv4_address: 172.20.0.3
+    volumes:
+      - ./config/R2/frr.conf:/etc/frr/frr.conf:ro
+      - ./config/daemons:/etc/frr/daemons
+    command: >
+      bash -c "
+        /usr/lib/frr/frrinit.sh start &&
+        tail -f /dev/null
+      "
+
+# ===========================
+# Networks (bridges for links)
+# ===========================
+networks:
+  R1h1br:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+
+  R2h2br:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+
+  R1R2br:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

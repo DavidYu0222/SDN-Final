@@ -1,0 +1,18 @@
+{
+  "priority": 50000,
+  "timeout": 0,
+  "isPermanent": true,
+  "selector": {
+    "criteria": [
+      {
+        "type": "ETH_TYPE",
+        "ethType": "0x800"
+      },
+      {
+        "type": "IPV4_DST",
+        "ip": "192.168.63.2/32"
+      }
+    ]
+  },
+  "treatment": {}
+}

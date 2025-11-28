@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  h1:
+    build: ./host
+    image: lab6-host
+    container_name: h1
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+
+  h2:
+    image: lab6-host
+    container_name: h2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+  
+  h3:
+    image: lab6-host
+    container_name: h3
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+
+  onos:
+    image: onosproject/onos:2.7-latest
+    container_name: onos
+    networks:
+      labnet:
+        ipv4_address: 192.168.100.2
+    ports:
+      - "8181:8181"   # ONOS Web UI
+      - "6653:6653"   # OpenFlow
+      - "8101:8101"   # ONOS CLI (ssh)
+      - "2620:2620"
+    environment:
+      - ONOS_APPS=drivers,fpm,openflow,gui2 #,fwd
+
+  frr:
+    image: frrouting/frr-debian
+    container_name: frr
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    networks:
+      labnet:
+        ipv4_address: 192.168.100.3
+    volumes:
+      - ./config/as65100/frr.conf:/etc/frr/frr.conf:ro
+      - ./config/daemons:/etc/frr/daemons
+    command: >
+      bash -c "
+        /usr/lib/frr/frrinit.sh start &&
+        tail -f /dev/null
+      "
+  
+  router:
+    image: frrouting/frr-debian
+    container_name: router
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    volumes:
+      - ./config/as65101/frr.conf:/etc/frr/frr.conf:ro
+      - ./config/daemons:/etc/frr/daemons
+    command: >
+      bash -c "
+        /usr/lib/frr/frrinit.sh start &&
+        tail -f /dev/null
+      "
+
+networks:
+  labnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+          gateway: 192.168.100.1

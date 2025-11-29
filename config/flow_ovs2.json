@@ -5,12 +5,14 @@
   "selector": {
     "criteria": [
       {
-        "type": "ETH_TYPE",
-        "ethType": "0x800"
+        "type": "IN_PORT",
+        "port": "3"
       },
-      {
-        "type": "IPV4_DST",
-        "ip": "192.168.63.2/32"
+      { 
+        "type": "ETH_TYPE", "ethType": "0x86DD"
+      },
+      { 
+        "type": "IPV6_DST", "ip": "ff02::1:ff00:2/128" 
       }
     ]
   },

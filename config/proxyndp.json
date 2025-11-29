@@ -1,0 +1,13 @@
+{
+  "apps": {
+    "nycu.winlab.proxyndp": {
+      "ProxyNdpConfig": {
+        "virtual-router": {
+            "ipv4": "172.16.10.1",
+            "ipv6": "2a0b:4e07:c4:10::1",
+            "mac": "00:00:00:00:00:10"
+        }
+      }
+    }
+  }
+}

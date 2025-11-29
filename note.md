@@ -150,7 +150,6 @@ docker exec router ip link set veth-h3 up
 docker exec h3 ip route del default 
 docker exec h3 ip route add default via 172.17.10.1
 
-
 sudo ip link delete veth-h3
 ```
 
@@ -183,6 +182,74 @@ onos@root > routes
 
 http://140.113.60.186:8880/lg
 
-curl -u onos:rocks -X POST -H 'Content-Type: application/json' -d @flow_ovs2.json 'http://localhost:8181/onos/v1/flows/of:00002667aa7dca4e'
+curl -u onos:rocks -X POST -H 'Content-Type: application/json' -d @config/flow_ovs2.json 'http://localhost:8181/onos/v1/flows/of:0000011155014202'
 
+onos-netcfg localhost ./config/proxyndp.json
 ```
+
+## Final
+change frr ip from 172.16.10.1 to 172.16.10.69
+bgp port 179
+
+### issue
+
+#### IPV6 Connection between AS65xx0 and AS65xx1
+
+On frr, find the mac of fd63::2 change frequently
+```bash
+root@e58c2612640d:/# ip -6 neigh
+fe80::e0f1:adff:fecb:e0df dev eth-frr lladdr e2:f1:ad:cb:e0:df router REACHABLE
+fe80::44a3:a3ff:fece:faf6 dev eth-frr lladdr 46:a3:a3:ce:fa:f6 STALE
+fd70::fe dev eth-frr lladdr 0e:a7:1a:c5:29:15 router REACHABLE
+fe80::200:ff:fe00:2 dev eth-frr lladdr 00:00:00:00:00:02 STALE
+fe80::f42d:e8ff:fecb:edff dev eth-frr lladdr f6:2d:e8:cb:ed:ff STALE
+fd63::2 dev eth-frr lladdr e2:f1:ad:cb:e0:df router REACHABLE
+
+root@e58c2612640d:/# ip -6 neigh
+fe80::e0f1:adff:fecb:e0df dev eth-frr lladdr e2:f1:ad:cb:e0:df router STALE
+fe80::44a3:a3ff:fece:faf6 dev eth-frr lladdr 46:a3:a3:ce:fa:f6 STALE
+fd70::fe dev eth-frr lladdr 0e:a7:1a:c5:29:15 router REACHABLE
+fe80::200:ff:fe00:2 dev eth-frr lladdr 00:00:00:00:00:02 STALE
+fe80::f42d:e8ff:fecb:edff dev eth-frr lladdr f6:2d:e8:cb:ed:ff STALE
+fd63::2 dev eth-frr lladdr 00:00:00:00:00:02 router REACHABLE
+```
+
+Using wireshark catch the packets on veth-frr (filter: ICMP6).
+Find the NDP NS with target fd63::2 send from other AS.
+
+```pcap
+Frame 5568: 86 bytes on wire (688 bits), 86 bytes captured (688 bits) on interface veth-frr, id 0
+Ethernet II, Src: 00:00:00_00:00:04 (00:00:00:00:00:04), Dst: IPv6mcast_ff:00:00:02 (33:33:ff:00:00:02) Internet Protocol Version 6, Src: fd63::1, Dst: ff02::1:ff00:2
+Internet Control Message Protocol v6 
+Type: Neighbor Solicitation (135) 
+Code: 0 
+Checksum: 0x7ece [correct] [Checksum Status: Good] 
+Reserved: 00000000 
+Target Address: fd63::2 
+ICMPv6 Option (Source link-layer address : 00:00:00:00:00:04) Type: Source link-layer address (1) Length: 1 (8 bytes) Link-layer address: 00:00:00_00:00:04 (00:00:00:00:00:04)
+```
+
+Block the packet on ovs2 port 3
+
+{
+  "priority": 50000,
+  "timeout": 0,
+  "isPermanent": true,
+  "selector": {
+    "criteria": [
+      {
+        "type": "IN_PORT",
+        "port": "3"
+      },
+      { 
+        "type": "ETH_TYPE", "ethType": "0x86DD"
+      },
+      { 
+        "type": "IPV6_DST", "ip": "ff02::1:ff00:2/128" 
+      }
+    ]
+  },
+  "treatment": {}
+}
+
+

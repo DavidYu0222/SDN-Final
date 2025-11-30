@@ -1,0 +1,14 @@
+{
+  "apps": {
+    "nycu.winlab.proxyndp": {
+      "VRouterConfig": {
+        "virtual-router": {
+            "cp-set": [
+                "of:0000011155014201/4",
+                "of:0000011155014201/"
+            ]
+        }
+      }
+    }
+  }
+}

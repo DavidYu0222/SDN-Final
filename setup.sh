@@ -6,7 +6,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
-BRIDGE_APP_PATH="${HOME}/SDN/Lab5/bridge-app/target/bridge-app-1.0-SNAPSHOT.oar"
+# BRIDGE_APP_PATH="${HOME}/SDN/Lab5/bridge-app/target/bridge-app-1.0-SNAPSHOT.oar"
+BRIDGE_APP_PATH="./vrouter/target/vrouter-1.0-SNAPSHOT.oar"
 PROXYNDP_APP_PATH="./proxyndp/target/proxyndp-1.0-SNAPSHOT.oar"
 
 function create_topology() {
@@ -122,6 +123,8 @@ function clean_topology() {
     echo -e "${RED}Topology cleaned.${NC}"
 }
 
+# -----------------------------------------------------------------------------------
+
 function install_bridge_app() {
 echo -e "${GREEN}Waiting for ONOS to accept app installation...${NC}"
 
@@ -146,6 +149,8 @@ echo -e "${GREEN}proxyndp-app is ACTIVE!${NC}"
 sleep 4
 echo -e "${GREEN}Pass config using netcfg.${NC}"
 onos-netcfg localhost ./config/proxyndp.json
+onos-netcfg localhost ./config/WANConnectPoint.json
+
 }
 
 function install_flow_rule() {
@@ -175,8 +180,8 @@ case "$1" in
         install_proxyndp_app
         install_bridge_app
         # wg-quick up wg0
-        # sleep 10
-        # install_flow_rule
+        sleep 10
+        install_flow_rule
         ;;
     down)
         clean_topology

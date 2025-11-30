@@ -62,6 +62,7 @@ import org.onlab.packet.Ethernet;
 import org.onlab.packet.MacAddress;
 import org.onlab.packet.ARP;
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.IpPrefix;
 import org.onlab.packet.IPv6;
 import org.onlab.packet.ICMP6;
 import org.onlab.packet.ndp.NeighborSolicitation;
@@ -88,7 +89,7 @@ public class AppComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected EdgePortService edgePortService;
 
-    private ProxyArpProcessor processor = new ProxyArpProcessor();
+    private ProxyNdpProcessor processor = new ProxyNdpProcessor();
     private ApplicationId appId;
 
     // Table: IP -> MAC
@@ -172,7 +173,13 @@ public class AppComponent {
         }
     }
 
-    private class ProxyArpProcessor implements PacketProcessor {
+    private class ProxyNdpProcessor implements PacketProcessor {
+        IpPrefix prefix70 = IpPrefix.valueOf("192.168.70.0/24");
+        IpAddress my70 = IpAddress.valueOf("192.168.70.10");
+        IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
+        IpPrefix prefixFd70 = IpPrefix.valueOf("fd70::/64");
+        IpAddress myFd70 = IpAddress.valueOf("fd70::10");
+        IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         @Override
         public void process(PacketContext context) {
@@ -201,6 +208,13 @@ public class AppComponent {
                 // Add src to table
                 if (ipMacTable.get(srcIp) == null) {
                     ipMacTable.put(srcIp, srcMac);
+                }
+
+                // Block other AS's ARP
+                if (prefix70.contains(dstIp) && !dstIp.equals(my70) && !dstIp.equals(ixp70)) {
+                    //log.info("Skip flood for NS: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                    context.block();
+                    return; // don't flood, don't handle this NS
                 }
 
                 // Handle ARP (A -> B)
@@ -251,6 +265,13 @@ public class AppComponent {
                         // Get Taget IP from NS
                         NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
+
+                        // Block other AS's NS
+                        if (prefixFd70.contains(dstIp) && !dstIp.equals(myFd70) && !dstIp.equals(ixpFd70)) {
+                            //log.info("Skip flood for NS: {} in fd70::/64 (except fd70::10)", dstIp);
+                            context.block();
+                            return; // don't flood, don't handle this NS
+                        }
 
                         if (ipMacTable.get(dstIp) == null) {
                             // Flood NDP NS to edge port

@@ -48,8 +48,8 @@ services:
       - NET_ADMIN
       - NET_BROADCAST
     sysctls:
-      - net.ipv4.ip_forward=1
-      - net.ipv6.conf.all.forwarding=1
+      - net.ipv4.ip_forward=0
+      - net.ipv6.conf.all.forwarding=0
     networks:
       labnet:
         ipv4_address: 192.168.100.3

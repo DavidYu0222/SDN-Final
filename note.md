@@ -185,11 +185,19 @@ http://140.113.60.186:8880/lg
 curl -u onos:rocks -X POST -H 'Content-Type: application/json' -d @config/flow_ovs2.json 'http://localhost:8181/onos/v1/flows/of:0000011155014202'
 
 onos-netcfg localhost ./config/proxyndp.json
+onos-netcfg localhost ./config/WANConnectionPoint
+onos@root > interfaces
+
 ```
 
 ## Final
 change frr ip from 172.16.10.1 to 172.16.10.69
+disable ip forward on frr
+
 bgp port 179
+router:xxx (AS65101) <-> frr:179 (AS65100)
+frr:xxx    (AS65100) <-> IXP:179 (AS65000)
+
 
 ### issue
 
@@ -230,7 +238,7 @@ ICMPv6 Option (Source link-layer address : 00:00:00:00:00:04) Type: Source link-
 ```
 
 Block the packet on ovs2 port 3
-
+```json
 {
   "priority": 50000,
   "timeout": 0,
@@ -251,5 +259,5 @@ Block the packet on ovs2 port 3
   },
   "treatment": {}
 }
-
+```
 

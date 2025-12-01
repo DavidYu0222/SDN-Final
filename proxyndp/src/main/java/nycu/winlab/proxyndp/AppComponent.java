@@ -175,11 +175,18 @@ public class AppComponent {
 
     private class ProxyNdpProcessor implements PacketProcessor {
         IpPrefix prefix70 = IpPrefix.valueOf("192.168.70.0/24");
+        IpPrefix prefixFd70 = IpPrefix.valueOf("fd70::/64");
+
         IpAddress my70 = IpAddress.valueOf("192.168.70.10");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
-        IpPrefix prefixFd70 = IpPrefix.valueOf("fd70::/64");
+
         IpAddress myFd70 = IpAddress.valueOf("fd70::10");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
+
+        // 63 only exist in ovs1
+        DeviceId ovs1Id = DeviceId.deviceId("of:0000011155014201");
+        IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
+        IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
         @Override
         public void process(PacketContext context) {
@@ -205,6 +212,13 @@ public class AppComponent {
                 MacAddress dstMac = MacAddress.valueOf(arp.getTargetHardwareAddress());
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
+                // Block 192.168.63.0/24 from outside
+                if (prefix63.contains(dstIp) && !recDevId.equals(ovs1Id)) {
+                    log.info("Skip flood for ARP: {} on {}", dstIp, recDevId);
+                    context.block();
+                    return; // don't flood, don't handle this ARP
+                }
+
                 // Add src to table
                 if (ipMacTable.get(srcIp) == null) {
                     ipMacTable.put(srcIp, srcMac);
@@ -212,9 +226,9 @@ public class AppComponent {
 
                 // Block other AS's ARP
                 if (prefix70.contains(dstIp) && !dstIp.equals(my70) && !dstIp.equals(ixp70)) {
-                    //log.info("Skip flood for NS: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                    //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
                     context.block();
-                    return; // don't flood, don't handle this NS
+                    return; // don't flood, don't handle this ARP
                 }
 
                 // Handle ARP (A -> B)
@@ -245,10 +259,23 @@ public class AppComponent {
                         sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
                         //log.info("RECV REPLY. Requested MAC = {}", srcMac);
                     }
-                    requestTable.remove(dstIp);
+                    //requestTable.remove(dstIp);
                 }
+                // Blocks the outbound packet
+                context.block();
+                return;
             } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
+
+                // Block fd63::/64 from outside
+                IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1Id)) {
+                    // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                    context.block();
+                    return; // don't flood, don't handle this IPv6
+                }
+
                 if (ipv6.getNextHeader() == IPv6.PROTOCOL_ICMP6) {
                     MacAddress srcMac = ethPkt.getSourceMAC();
                     IpAddress srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
@@ -258,13 +285,21 @@ public class AppComponent {
 
                     // Handle NDP (A -> B) Neighbor Solicitation
                     if (icmpType == ICMP6.NEIGHBOR_SOLICITATION) {
+                        // Get Taget IP from NS
+                        NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
+                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
+
+                        // Block 192.168.63.0/24 from outside
+                        // if (prefixFd63.contains(dstIp) && !recDevId.equals(ovs1Id)) {
+                        //     log.info("[Tag]Skip flood for NS: {} on {}", dstIp, recDevId);
+                        //     context.block();
+                        //     return; // don't flood, don't handle this NS
+                        // }
+
                         // Add src to table
                         if (ipMacTable.get(srcIp) == null) {
                             ipMacTable.put(srcIp, srcMac);
                         }
-                        // Get Taget IP from NS
-                        NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
-                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
 
                         // Block other AS's NS
                         if (prefixFd70.contains(dstIp) && !dstIp.equals(myFd70) && !dstIp.equals(ixpFd70)) {
@@ -305,12 +340,14 @@ public class AppComponent {
                             sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
                             //log.info("RECV REPLY. Requested MAC = {}", srcMac);
                         }
-                        requestTable.remove(dstIp);
+                        //requestTable.remove(dstIp);
                     }
+                    // Blocks the outbound packet
+                    context.block();
+                    return;
                 }
             }
-            // Blocks the outbound packet
-            context.block();
+
         }
     }
 

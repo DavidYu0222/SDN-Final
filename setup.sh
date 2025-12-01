@@ -153,24 +153,24 @@ onos-netcfg localhost ./config/WANConnectPoint.json
 
 }
 
-function install_flow_rule() {
-echo -e "${GREEN}Install flow rule for OVS2${NC}"
+# function install_flow_rule() {
+# echo -e "${GREEN}Install flow rule for OVS2${NC}"
 
-while true; do
-    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -u onos:rocks \
-        -X POST -H 'Content-Type: application/json' \
-        -d @config/flow_ovs2.json \
-        'http://localhost:8181/onos/v1/flows/of:0000011155014202')
+# while true; do
+#     RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -u onos:rocks \
+#         -X POST -H 'Content-Type: application/json' \
+#         -d @config/flow_ovs2.json \
+#         'http://localhost:8181/onos/v1/flows/of:0000226f63cd0340')
 
-    if [ "$RESPONSE" -eq 201 ]; then
-        echo -e "${GREEN}[SUCCESS] Flow rule installed!${NC}"
-        break
-    else
-        echo -e "${YELLOW}[WAIT] Flow install failed (HTTP $RESPONSE), retrying in 2 seconds...${NC}"
-        sleep 2
-    fi
-done
-}
+#     if [ "$RESPONSE" -eq 201 ]; then
+#         echo -e "${GREEN}[SUCCESS] Flow rule installed!${NC}"
+#         break
+#     else
+#         echo -e "${YELLOW}[WAIT] Flow install failed (HTTP $RESPONSE), retrying in 2 seconds...${NC}"
+#         sleep 2
+#     fi
+# done
+# }
 
 
 case "$1" in
@@ -181,7 +181,7 @@ case "$1" in
         install_bridge_app
         # wg-quick up wg0
         sleep 10
-        install_flow_rule
+        # install_flow_rule
         ;;
     down)
         clean_topology

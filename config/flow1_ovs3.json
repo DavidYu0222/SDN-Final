@@ -1,0 +1,20 @@
+{
+  "priority": 50000,
+  "timeout": 0,
+  "isPermanent": true,
+  "selector": {
+    "criteria": [
+      {
+        "type": "IN_PORT",
+        "port": "3"
+      },
+      { 
+        "type": "ETH_TYPE", "ethType": "0x800"
+      },
+      { 
+        "type": "IPV4_SRC", "ip": "192.168.63.0/24" 
+      }
+    ]
+  },
+  "treatment": {}
+}

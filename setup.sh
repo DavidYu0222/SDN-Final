@@ -10,6 +10,30 @@ NC='\033[0m'
 BRIDGE_APP_PATH="./vrouter/target/vrouter-1.0-SNAPSHOT.oar"
 PROXYNDP_APP_PATH="./proxyndp/target/proxyndp-1.0-SNAPSHOT.oar"
 
+function delete_link_local_ipv6() {
+    local CONTAINER_NAME=$1
+    local INTERFACE=$2
+    
+    # 1. Execute inside the container's namespace
+    # 2. Find the fe80:: address (scope link) for the specific interface
+    # 3. Use awk to extract the address/prefix (e.g., fe80::.../64)
+    # 4. Use xargs to pass the address to 'ip addr del'
+    
+    echo -e "  Deleting fe80:: on ${INTERFACE} in container ${CONTAINER_NAME}..."
+    
+    docker exec ${CONTAINER_NAME} /bin/bash -c "
+        # Check if the interface exists and has a link-local address
+        LINK_LOCAL_ADDR=\$(ip -6 addr show dev ${INTERFACE} scope link | awk '/inet6/ {print \$2}')
+        
+        if [ -n \"\$LINK_LOCAL_ADDR\" ]; then
+            ip -6 addr del \${LINK_LOCAL_ADDR} dev ${INTERFACE}
+            echo -e \"  -> Deleted \${LINK_LOCAL_ADDR}\"
+        else
+            echo -e \"  -> No fe80:: address found to delete on ${INTERFACE}.\"
+        fi
+    "
+}
+
 function create_topology() {
     echo -e "${GREEN}Starting Topology deploying.${NC}"
 
@@ -80,6 +104,11 @@ function create_topology() {
     docker exec router ip link set eth-r up
     docker exec router ip link set veth-h3 up
     docker exec h3 ip link set eth-h3 up
+
+    echo -e "${GREEN}Delete link local.${NC}"
+    delete_link_local_ipv6 frr eth-frr
+    delete_link_local_ipv6 router eth-r
+    delete_link_local_ipv6 router veth-h3
 
     echo -e "${GREEN}Topology deployed successfully.${NC}"
 }
@@ -153,13 +182,14 @@ onos-netcfg localhost ./config/WANConnectPoint.json
 
 }
 
+# To prevent the host provider learn wrong ip src
 # function install_flow_rule() {
-# echo -e "${GREEN}Install flow rule for OVS2${NC}"
+# echo -e "${GREEN}Install flow rule 1 for OVS3${NC}"
 
 # while true; do
 #     RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -u onos:rocks \
 #         -X POST -H 'Content-Type: application/json' \
-#         -d @config/flow_ovs2.json \
+#         -d @config/flow1_ovs3.json \
 #         'http://localhost:8181/onos/v1/flows/of:0000226f63cd0340')
 
 #     if [ "$RESPONSE" -eq 201 ]; then

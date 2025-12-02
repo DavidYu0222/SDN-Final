@@ -175,6 +175,10 @@ make clean
 ip a
 ip route
 ip -6 route
+
+ip neigh
+ip neigh flush all
+
 ip -br -c a
 onos onos@localhost
 rocks
@@ -187,6 +191,9 @@ curl -u onos:rocks -X POST -H 'Content-Type: application/json' -d @config/flow_o
 onos-netcfg localhost ./config/proxyndp.json
 onos-netcfg localhost ./config/WANConnectionPoint
 onos@root > interfaces
+
+onos@root > routes
+onos@root > hosts | grep 192.168.63.1
 
 ```
 

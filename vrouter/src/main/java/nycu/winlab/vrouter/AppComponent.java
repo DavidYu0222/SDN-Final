@@ -265,6 +265,9 @@ public class AppComponent {
     // }
 
     private class RouteProcessor implements PacketProcessor {
+        DeviceId ovs1Id = DeviceId.deviceId("of:0000011155014201");
+        IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
+        IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
         @Override
         public void process(PacketContext context) {
@@ -302,6 +305,14 @@ public class AppComponent {
                 return;
             } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
+                // Block fd63::/64 from outside
+                IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1Id)) {
+                    // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                    context.block();
+                    return; // don't flood, don't handle this IPv6
+                }
                 if (ipv6.getNextHeader() == IPv6.PROTOCOL_ICMP6) {
                     ICMP6 icmp6 = (ICMP6) ipv6.getPayload();
                     byte icmpType = icmp6.getIcmpType();
@@ -372,7 +383,6 @@ public class AppComponent {
                         // install rule for Mac change and forward
                         TrafficSelector.Builder selInter2Intra = DefaultTrafficSelector.builder();
                         selInter2Intra.matchEthSrc(nextHopMac);
-                        selInter2Intra.matchEthDst(dstMac);
                         if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
                             selInter2Intra.matchEthType(Ethernet.TYPE_IPV4).matchIPDst(IpPrefix.valueOf(srcIp, 32));
                         } else {

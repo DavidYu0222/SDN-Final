@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,8 +23,10 @@ import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+// import java.util.Set;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
@@ -43,10 +45,12 @@ import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.TrafficSelector;
 
 import org.onosproject.net.flow.DefaultTrafficTreatment;
-// import org.onosproject.net.flow.TrafficTreatment;
 
 import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
+import org.onosproject.net.Host;
+import org.onosproject.net.HostId;
+import org.onosproject.net.HostLocation;
 import org.onosproject.net.PortNumber;
 
 import org.onosproject.net.packet.PacketPriority;
@@ -56,10 +60,18 @@ import org.onosproject.net.packet.PacketContext;
 import org.onosproject.net.packet.InboundPacket;
 import org.onosproject.net.packet.DefaultOutboundPacket;
 
+import org.onosproject.net.provider.ProviderId;
+import org.onosproject.net.host.DefaultHostDescription;
+import org.onosproject.net.host.HostDescription;
+import org.onosproject.net.host.HostProvider;
+import org.onosproject.net.host.HostProviderRegistry;
+import org.onosproject.net.host.HostProviderService;
+
 import org.onosproject.net.edge.EdgePortService;
 
 import org.onlab.packet.Ethernet;
 import org.onlab.packet.MacAddress;
+import org.onlab.packet.VlanId;
 import org.onlab.packet.ARP;
 import org.onlab.packet.IpAddress;
 import org.onlab.packet.IpPrefix;
@@ -67,15 +79,23 @@ import org.onlab.packet.IPv6;
 import org.onlab.packet.ICMP6;
 import org.onlab.packet.ndp.NeighborSolicitation;
 import org.onlab.packet.ndp.NeighborAdvertisement;
+
+// import org.onosproject.net.intent.IntentService;
+// import org.onosproject.net.intent.PointToPointIntent;
+// import org.onosproject.net.intent.MultiPointToSinglePointIntent;
+// import org.onosproject.net.intent.SinglePointToMultiPointIntent;
+
+// import org.onosproject.net.intf.InterfaceService;
+// import org.onosproject.routeservice.RouteService;
+// import org.onosproject.routeservice.RouteTableId;
+// import org.onosproject.routeservice.ResolvedRoute;
 /**
  * Proxy ARP application component.
  */
 @Component(immediate = true)
-public class AppComponent {
+public class AppComponent implements HostProvider { // [CHANGE] Implements HostProvider
 
     private final Logger log = LoggerFactory.getLogger("ProxyNDP");
-
-    /** Some configurable property. */
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected NetworkConfigRegistry cfgService;
@@ -89,8 +109,16 @@ public class AppComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected EdgePortService edgePortService;
 
+    // [CHANGE] Inject HostProviderRegistry
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    protected HostProviderRegistry hostProviderRegistry;
+
     private ProxyNdpProcessor processor = new ProxyNdpProcessor();
     private ApplicationId appId;
+
+    // [CHANGE] Variables for Host Provider
+    private HostProviderService providerService;
+    private static final ProviderId PID = new ProviderId("app", "nycu.winlab.proxyndp");
 
     // Table: IP -> MAC
     private Map<IpAddress, MacAddress> ipMacTable = new HashMap<>();
@@ -111,6 +139,9 @@ public class AppComponent {
     protected void activate() {
         // register your app
         appId = coreService.registerApplication("nycu.winlab.proxyndp");
+
+        // [CHANGE] Register as a HostProvider
+        providerService = hostProviderRegistry.register(this);
 
         // add a packet processor to packetService
         packetService.addProcessor(processor, PacketProcessor.director(2));
@@ -133,6 +164,10 @@ public class AppComponent {
 
     @Deactivate
     protected void deactivate() {
+        // [CHANGE] Unregister HostProvider
+        hostProviderRegistry.unregister(this);
+        providerService = null;
+
         // remove your packet processor
         packetService.removeProcessor(processor);
         processor = null;
@@ -151,6 +186,44 @@ public class AppComponent {
         packetService.cancelPackets(selIpv6.build(), PacketPriority.REACTIVE, appId);
 
         log.info("Stopped");
+    }
+
+    // [CHANGE] Required method for HostProvider interface
+    @Override
+    public ProviderId id() {
+        return PID;
+    }
+
+    // [CHANGE] Required method for HostProvider interface
+    @Override
+    public void triggerProbe(Host host) {
+        // Optional: Logic to probe host if needed (e.g. send ARP request)
+    }
+
+    // [CHANGE] Helper method to push Host info to ONOS Core
+    private void learnHost(IpAddress ip, MacAddress mac, VlanId vlan, DeviceId deviceId, PortNumber port) {
+        if (providerService == null) {
+            return;
+        }
+
+        // Prepare Host ID
+        HostId hostId = HostId.hostId(mac, vlan);
+
+        // Prepare Location
+        HostLocation loc = new HostLocation(deviceId, port, System.currentTimeMillis());
+
+        // Create Description
+        // This tells the core: This MAC has this IP, and is at this location
+        HostDescription desc = new DefaultHostDescription(
+                mac,
+                vlan,
+                loc,
+                Collections.singleton(ip)
+        );
+
+        // Push to core
+        providerService.hostDetected(hostId, desc, false);
+        //log.info("Pushed Host to Core: IP={} MAC={}", ip, mac);
     }
 
     private class ProxyNdpConfigListener implements NetworkConfigListener {
@@ -188,6 +261,12 @@ public class AppComponent {
         IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
+        // My network
+        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
+        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
+        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
+        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+
         @Override
         public void process(PacketContext context) {
             // Stop processing if the packet has been handled, since we
@@ -199,11 +278,13 @@ public class AppComponent {
             Ethernet ethPkt = inPkt.parsed();
             DeviceId recDevId = inPkt.receivedFrom().deviceId();
             PortNumber recPort = inPkt.receivedFrom().port();
+            VlanId vlan = VlanId.vlanId(ethPkt.getVlanID()); // Get VLAN for Host learning
 
             if (ethPkt == null) {
                 return;
             }
 
+            // Handle ARP and NDP
             if (ethPkt.getEtherType() == Ethernet.TYPE_ARP) {
                 ARP arp = (ARP) ethPkt.getPayload();
 
@@ -213,11 +294,14 @@ public class AppComponent {
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
                 // Block 192.168.63.0/24 from outside
-                if (prefix63.contains(dstIp) && !recDevId.equals(ovs1Id)) {
-                    log.info("Skip flood for ARP: {} on {}", dstIp, recDevId);
+                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1Id)) {
+                    log.info("[Tag] Skip flood for ARP: {} on {}", dstIp, recDevId);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
+
+                // [CHANGE] Learn host info immediately from the incoming ARP packet
+                learnHost(srcIp, srcMac, vlan, recDevId, recPort);
 
                 // Add src to table
                 if (ipMacTable.get(srcIp) == null) {
@@ -225,39 +309,38 @@ public class AppComponent {
                 }
 
                 // Block other AS's ARP
-                if (prefix70.contains(dstIp) && !dstIp.equals(my70) && !dstIp.equals(ixp70)) {
+                // if (prefix70.contains(dstIp) && !dstIp.equals(my70) && !dstIp.equals(ixp70)) {
+                //     //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                //     context.block();
+                //     return; // don't flood, don't handle this ARP
+                // }
+                // Firewall
+                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !prefix63.contains(dstIp) &&
+                    !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
 
-                // Handle ARP (A -> B)
                 if (arp.getOpCode() == ARP.OP_REQUEST) {
                     if (ipMacTable.get(dstIp) == null) {
-                        // B's IP (dstIp)
                         // Flood ARP Request to edge port
                         flood(context, ethPkt);
-
-                        // Add A's IP to requestTable
                         requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
-                        log.info("ARP TABLE MISS. Requested IP = {}, Send request to edge ports", dstIp);
+                        log.info("ARP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                     } else {
                         // Send ARP Reply to the requester
                         MacAddress targetMac = ipMacTable.get(dstIp);
-                        //buildArpReply​(Ip4Address srcIp, MacAddress srcMac, Ethernet request)
-                        Ethernet arpReply = ARP.buildArpReply(
-                            dstIp.getIp4Address(), targetMac, ethPkt);
-
+                        Ethernet arpReply = ARP.buildArpReply(dstIp.getIp4Address(), targetMac, ethPkt);
                         sendReply(arpReply, recDevId, recPort);
-                        log.info("ARP TABLE HIT. Requested MAC = {}", targetMac);
+                        log.info("ARP TABLE HIT. {} -> {} Requested MAC = {}", srcIp, dstIp, targetMac);
                     }
                 } else if (arp.getOpCode() == ARP.OP_REPLY) {
                     // Send ARP Reply to the original requester
-                    // A's IP (dstIp)
                     ConnectPoint requestHost = requestTable.get(dstIp);
                     if (requestHost != null) {
                         sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
-                        //log.info("RECV REPLY. Requested MAC = {}", srcMac);
+                        log.info("RECV REPLY. {} <- {} Requested MAC = {}", dstIp, srcIp, srcMac);
                     }
                     //requestTable.remove(dstIp);
                 }
@@ -280,6 +363,9 @@ public class AppComponent {
                     MacAddress srcMac = ethPkt.getSourceMAC();
                     IpAddress srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
 
+                    // [CHANGE] Learn host info immediately from incoming IPv6 packet
+                    learnHost(srcIp, srcMac, vlan, recDevId, recPort);
+
                     ICMP6 icmp6 = (ICMP6) ipv6.getPayload();
                     byte icmpType = icmp6.getIcmpType();
 
@@ -289,43 +375,39 @@ public class AppComponent {
                         NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
 
-                        // Block 192.168.63.0/24 from outside
-                        // if (prefixFd63.contains(dstIp) && !recDevId.equals(ovs1Id)) {
-                        //     log.info("[Tag]Skip flood for NS: {} on {}", dstIp, recDevId);
-                        //     context.block();
-                        //     return; // don't flood, don't handle this NS
-                        // }
-
                         // Add src to table
                         if (ipMacTable.get(srcIp) == null) {
                             ipMacTable.put(srcIp, srcMac);
                         }
 
                         // Block other AS's NS
-                        if (prefixFd70.contains(dstIp) && !dstIp.equals(myFd70) && !dstIp.equals(ixpFd70)) {
-                            //log.info("Skip flood for NS: {} in fd70::/64 (except fd70::10)", dstIp);
+                        // if (prefixFd70.contains(dstIp) && !dstIp.equals(myFd70) && !dstIp.equals(ixpFd70)) {
+                        //     //log.info("Skip flood for NS: {} in fd70::/64 (except fd70::10)", dstIp);
+                        //     context.block();
+                        //     return; // don't flood, don't handle this NS
+                        // }
+                        // Firewall
+                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
+                            !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
+                            //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
                             context.block();
-                            return; // don't flood, don't handle this NS
+                            return; // don't flood, don't handle this ARP
                         }
 
                         if (ipMacTable.get(dstIp) == null) {
                             // Flood NDP NS to edge port
                             flood(context, ethPkt);
-
-                            // Add A's IP to requestTable
                             requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
-                            log.info("NDP TABLE MISS. Requested IP = {}, Send NDP Solicitation to edge ports", dstIp);
+                            log.info("NDP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                         } else {
                             // Send NDP NA to the requester
                             MacAddress targetMac = ipMacTable.get(dstIp);
                             Ethernet ndpReply = NeighborAdvertisement.buildNdpAdv(
                                 dstIp.getIp6Address(), targetMac, ethPkt);
-
                             IPv6 ipv6NdpReply = (IPv6) ndpReply.getPayload();
                             ipv6NdpReply.setHopLimit((byte) 255);   // buildNdpAdv use 85 which is wrong
-
                             sendReply(ndpReply, recDevId, recPort);
-                            log.info("NDP TABLE HIT. Requested MAC = {}", targetMac);
+                            log.info("NDP TABLE HIT. {} -> {}, Requested MAC = {}", srcIp, dstIp, targetMac);
                         }
                     } else if (icmpType == ICMP6.NEIGHBOR_ADVERTISEMENT) {
                         // Add src to table
@@ -333,9 +415,17 @@ public class AppComponent {
                             ipMacTable.put(srcIp, srcMac);
                         }
                         // Send NA to the original requester
-                        // A's IP (dstIp)
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
                         ConnectPoint requestHost = requestTable.get(dstIp);
+
+                        // Firewall
+                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
+                            !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
+                            //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                            context.block();
+                            return; // don't flood, don't handle this ARP
+                        }
+
                         if (requestHost != null) {
                             sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
                             //log.info("RECV REPLY. Requested MAC = {}", srcMac);
@@ -348,6 +438,19 @@ public class AppComponent {
                 }
             }
 
+            // // Handle Ipv4
+            // if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
+            //     IpAddress srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
+            //     IpAddress dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
+            //     if (vrouterMac.equals(dstMac)) {
+            //         Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
+            //         if (resolvedRoute.isPresent()) {
+            //             ResolvedRoute route = resolvedRoute.get();
+            //             IpAddress nextHopIp = route.nextHop();
+            //             MacAddress nextHopMac = ipMacTable.get(nextHopIp);
+            //         }
+            //     }
+            // }
         }
     }
 
@@ -372,4 +475,3 @@ public class AppComponent {
         );
     }
 }
-

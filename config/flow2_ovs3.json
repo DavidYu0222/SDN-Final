@@ -1,0 +1,20 @@
+{
+  "priority": 50000,
+  "timeout": 0,
+  "isPermanent": true,
+  "selector": {
+    "criteria": [
+      {
+        "type": "IN_PORT",
+        "port": "3"
+      },
+      { 
+        "type": "ETH_TYPE", "ethType": "0x86DD"
+      },
+      { 
+        "type": "IPV6_SRC", "ip": "fd63::/64" 
+      }
+    ]
+  },
+  "treatment": {}
+}

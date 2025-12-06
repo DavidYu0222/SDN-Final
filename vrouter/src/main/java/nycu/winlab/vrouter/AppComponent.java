@@ -29,6 +29,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Optional;
 //import java.util.Collection;
+import java.util.List;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.nio.ByteBuffer;
 
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
@@ -39,11 +43,12 @@ import org.onosproject.net.flow.TrafficSelector;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.TrafficTreatment;
 
-// import org.onosproject.net.packet.PacketPriority;
+import org.onosproject.net.packet.PacketPriority;
 import org.onosproject.net.packet.PacketService;
 import org.onosproject.net.packet.PacketProcessor;
 import org.onosproject.net.packet.PacketContext;
 import org.onosproject.net.packet.InboundPacket;
+import org.onosproject.net.packet.DefaultOutboundPacket;
 
 import org.onlab.packet.Ethernet;
 import org.onlab.packet.MacAddress;
@@ -70,14 +75,8 @@ import org.onosproject.net.intent.SinglePointToMultiPointIntent;
 
 import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.routeservice.RouteService;
-// import org.onosproject.routeservice.RouteTableId;
 import org.onosproject.routeservice.ResolvedRoute;
-// import org.onosproject.routeservice.RouteInfo;
 
-
-// import org.onosproject.net.flowobjective.FlowObjectiveService;
-// import org.onosproject.net.flowobjective.DefaultForwardingObjective;
-// import org.onosproject.net.flowobjective.ForwardingObjective;
 /**
  * Learning Bridge application component.
  */
@@ -108,9 +107,6 @@ public class AppComponent {
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected RouteService routeService;
 
-    // @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    // protected FlowObjectiveService flowObjectiveService;
-
     // private final VRouterConfigListener cfgListener = new VRouterConfigListener();
     // private final ConfigFactory<ApplicationId, ProxyNdpConfig> factory = new ConfigFactory<>(
     //     APP_SUBJECT_FACTORY, ProxyNdpConfig.class, "ProxyNdpConfig") {
@@ -125,6 +121,9 @@ public class AppComponent {
     private ApplicationId appId;
     private Map<DeviceId, Map<MacAddress, PortNumber>> bridgeTable = new HashMap<>();
     private MacAddress vrouterMac = MacAddress.valueOf("00:00:00:00:00:10");
+    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
+    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
+    private final DeviceId ovs3 = DeviceId.deviceId("of:0000226f63cd0340");
 
     @Activate
     protected void activate() {
@@ -133,20 +132,20 @@ public class AppComponent {
         appId = coreService.registerApplication("nycu.winlab.vrouter");
 
         // // add a packet processor to packetService
-        // packetService.addProcessor(processor, PacketProcessor.director(2));
+        packetService.addProcessor(processor, PacketProcessor.director(2));
 
         // // install a flowrule for packet-in
         // TrafficSelector.Builder selArp = DefaultTrafficSelector.builder();
         // selArp.matchEthType(Ethernet.TYPE_ARP);
         // packetService.requestPackets(selArp.build(), PacketPriority.REACTIVE, appId);
 
-        // TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
-        // selv4.matchEthType(Ethernet.TYPE_IPV4);
-        // packetService.requestPackets(selv4.build(), PacketPriority.REACTIVE, appId);
+        TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
+        selv4.matchEthType(Ethernet.TYPE_IPV4);
+        packetService.requestPackets(selv4.build(), PacketPriority.REACTIVE, appId);
 
-        // TrafficSelector.Builder selv6 = DefaultTrafficSelector.builder();
-        // selv6.matchEthType(Ethernet.TYPE_IPV6);
-        // packetService.requestPackets(selv6.build(), PacketPriority.REACTIVE, appId);
+        TrafficSelector.Builder selv6 = DefaultTrafficSelector.builder();
+        selv6.matchEthType(Ethernet.TYPE_IPV6);
+        packetService.requestPackets(selv6.build(), PacketPriority.REACTIVE, appId);
 
         installBgpIntent();
 
@@ -156,25 +155,25 @@ public class AppComponent {
     @Deactivate
     protected void deactivate() {
 
-        // // remove flowrule installed by app
-        // flowRuleService.removeFlowRulesById(appId);
+        // remove flowrule installed by app
+        flowRuleService.removeFlowRulesById(appId);
 
-        // // remove packet processor
-        // packetService.removeProcessor(processor);
-        // processor = null;
+        // remove packet processor
+        packetService.removeProcessor(processor);
+        processor = null;
 
         // // remove flowrule you installed for packet-in
         // TrafficSelector.Builder selArp = DefaultTrafficSelector.builder();
         // selArp.matchEthType(Ethernet.TYPE_ARP);
         // packetService.cancelPackets(selArp.build(), PacketPriority.REACTIVE, appId);
 
-        // TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
-        // selv4.matchEthType(Ethernet.TYPE_IPV4);
-        // packetService.cancelPackets(selv4.build(), PacketPriority.REACTIVE, appId);
+        TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
+        selv4.matchEthType(Ethernet.TYPE_IPV4);
+        packetService.cancelPackets(selv4.build(), PacketPriority.REACTIVE, appId);
 
-        // TrafficSelector.Builder selv6 = DefaultTrafficSelector.builder();
-        // selv6.matchEthType(Ethernet.TYPE_IPV6);
-        // packetService.cancelPackets(selv6.build(), PacketPriority.REACTIVE, appId);
+        TrafficSelector.Builder selv6 = DefaultTrafficSelector.builder();
+        selv6.matchEthType(Ethernet.TYPE_IPV6);
+        packetService.cancelPackets(selv6.build(), PacketPriority.REACTIVE, appId);
 
         log.info("Stopped");
     }
@@ -265,9 +264,13 @@ public class AppComponent {
     // }
 
     private class RouteProcessor implements PacketProcessor {
-        DeviceId ovs1Id = DeviceId.deviceId("of:0000011155014201");
         IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
+        // My network
+        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
+        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
+        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
+        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
 
         @Override
         public void process(PacketContext context) {
@@ -285,30 +288,29 @@ public class AppComponent {
 
             DeviceId recDevId = pkt.receivedFrom().deviceId();
             PortNumber recPort = pkt.receivedFrom().port();
+            ConnectPoint recvCp = new ConnectPoint(recDevId, recPort);
             MacAddress srcMac = ethPkt.getSourceMAC();
             MacAddress dstMac = ethPkt.getDestinationMAC();
 
-            // rec packet-in from new device, create new table for it
-            if (bridgeTable.get(recDevId) == null) {
-                bridgeTable.put(recDevId, new HashMap<>());
-            }
+            // // rec packet-in from new device, create new table for it
+            // if (bridgeTable.get(recDevId) == null) {
+            //     bridgeTable.put(recDevId, new HashMap<>());
+            // }
 
-            if (bridgeTable.get(recDevId).get(srcMac) == null) {
-                // the mapping of pkt's src mac and receivedfrom port wasn't store in the table of the rec device
-                bridgeTable.get(recDevId).put(srcMac, recPort);
-                log.info("Add an entry to the port table of `{}`. MAC address: `{}` => Port: `{}`.",
-                        recDevId, srcMac, recPort);
-            }
+            // if (bridgeTable.get(recDevId).get(srcMac) == null) {
+            //     // the mapping of pkt's src mac and receivedfrom port wasn't store in the table of the rec device
+            //     bridgeTable.get(recDevId).put(srcMac, recPort);
+            //     log.info("Add an entry to the port table of `{}`. MAC address: `{}` => Port: `{}`.",
+            //             recDevId, srcMac, recPort);
+            // }
 
             // This handle by ProxyNdp App
-            if (ethPkt.getEtherType() == Ethernet.TYPE_ARP) {
-                return;
-            } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
+            if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
                 // Block fd63::/64 from outside
                 IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                 IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1Id)) {
+                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
                     // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                     context.block();
                     return; // don't flood, don't handle this IPv6
@@ -322,159 +324,269 @@ public class AppComponent {
                 }
             }
 
+            IpAddress srcIp = null;
+            IpAddress dstIp = null;
+            int prefixLen = -1;
+            if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
+                IPv4 ipv4 = (IPv4) ethPkt.getPayload();
+                if (ipv4 != null) {
+                    srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
+                    dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
+                    prefixLen = 32;
+                }
+            } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
+                IPv6 ipv6 = (IPv6) ethPkt.getPayload();
+                if (ipv6 != null) {
+                    srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                    dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                    prefixLen = 128;
+                }
+            }
+
+            if (dstIp == null) {
+                return;
+            }
+
+            // Intra to Inter
             if (vrouterMac.equals(dstMac)) {
-                IpAddress srcIp = null;
-                IpAddress dstIp = null;
-                if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
-                    IPv4 ipv4 = (IPv4) ethPkt.getPayload();
-                    if (ipv4 != null) {
-                        srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
-                        dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
-                    }
-                } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
-                    IPv6 ipv6 = (IPv6) ethPkt.getPayload();
-                    if (ipv6 != null) {
-                        srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-                        dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                    }
-                }
-                if (dstIp != null) {
-                    //log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
-                    Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
-                    if (resolvedRoute.isPresent()) {
-                        ResolvedRoute route = resolvedRoute.get();
-                        IpAddress nextHopIp = route.nextHop();
-                        MacAddress nextHopMac = route.nextHopMac();
-                        log.info("ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
-
-                        if (bridgeTable.get(recDevId).get(nextHopMac) == null) {
-                            log.info("Unknown outPort");
-                            context.block();
-                            return;
-                        }
-                        PortNumber outPort = bridgeTable.get(recDevId).get(nextHopMac);
-
-                        // install rule for Mac change and forward
-                        TrafficSelector.Builder selIntra2Inter = DefaultTrafficSelector.builder();
-                        selIntra2Inter.matchEthSrc(srcMac);
-                        selIntra2Inter.matchEthDst(dstMac);
-                        if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
-                            selIntra2Inter.matchEthType(Ethernet.TYPE_IPV4).matchIPDst(IpPrefix.valueOf(dstIp, 32));
-                        } else {
-                            selIntra2Inter.matchEthType(Ethernet.TYPE_IPV6).matchIPv6Dst(IpPrefix.valueOf(dstIp, 128));
-                        }
-
-                        TrafficTreatment.Builder treIntra2Inter = DefaultTrafficTreatment.builder();
-                        // rewrite L2
-                        treIntra2Inter.setEthSrc(dstMac);
-                        treIntra2Inter.setEthDst(nextHopMac);
-                        treIntra2Inter.setOutput(outPort);
-
-
-                        FlowRule intra2Inter = DefaultFlowRule.builder()
-                            .forDevice(recDevId)
-                            .withSelector(selIntra2Inter.build())
-                            .withTreatment(treIntra2Inter.build())
-                            .withPriority(40)
-                            .makeTemporary(30)
-                            .fromApp(appId)
-                            .build();
-
-                        // install rule for Mac change and forward
-                        TrafficSelector.Builder selInter2Intra = DefaultTrafficSelector.builder();
-                        selInter2Intra.matchEthSrc(nextHopMac);
-                        if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
-                            selInter2Intra.matchEthType(Ethernet.TYPE_IPV4).matchIPDst(IpPrefix.valueOf(srcIp, 32));
-                        } else {
-                            selInter2Intra.matchEthType(Ethernet.TYPE_IPV6).matchIPv6Dst(IpPrefix.valueOf(srcIp, 128));
-                        }
-
-                        TrafficTreatment.Builder treInter2Intra = DefaultTrafficTreatment.builder();
-                        // rewrite L2
-                        treInter2Intra.setEthSrc(dstMac);
-                        treInter2Intra.setEthDst(srcMac);
-                        treInter2Intra.setOutput(recPort);
-
-                        FlowRule inter2Intra = DefaultFlowRule.builder()
-                            .forDevice(recDevId)
-                            .withSelector(selInter2Intra.build())
-                            .withTreatment(treInter2Intra.build())
-                            .withPriority(40)
-                            .makeTemporary(30)
-                            .fromApp(appId)
-                            .build();
-
-                        flowRuleService.applyFlowRules(intra2Inter);
-                        flowRuleService.applyFlowRules(inter2Intra);
-                        packetOut(context, outPort);
-                    } else {
-                        log.warn("ROUTE NOT FOUND for {}", dstIp);
+                //log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
+                Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
+                if (resolvedRoute.isPresent()) {
+                    ResolvedRoute route = resolvedRoute.get();
+                    IpAddress nextHopIp = route.nextHop();
+                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
+                    if (nextHopMac == null) {
+                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
                         context.block();
+                        return;
                     }
+                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
+
+                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
+                    if (nextHopCp == null) {
+                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
+                        context.block();
+                        return;
+                    }
+                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+
+                    installPath(recvCp, nextHopCp, context, dstMac, nextHopMac, prefixLen); // dstMac = vrouterMac
+
+                    // Emit packet
+                    ethPkt.setSourceMACAddress(dstMac);
+                    ethPkt.setDestinationMACAddress(nextHopMac);
+                    packetService.emit(new DefaultOutboundPacket(
+                        nextHopCp.deviceId(),
+                        DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
+                        ByteBuffer.wrap(ethPkt.serialize())
+                    ));
+                } else {
+                    log.warn("ROUTE NOT FOUND for {}", dstIp);
+                    context.block();
+                    return;
                 }
-            } else {
-                if (bridgeTable.get(recDevId).get(dstMac) == null) {
-                    // the mapping of dst mac and forwarding port wasn't store in the table of the rec device
-                    flood(context);
-                    log.info("MAC address `{}` is missed on `{}`. Flood the packet.", dstMac, recDevId);
-                } else if (bridgeTable.get(recDevId).get(dstMac) != null) {
-                    // there is a entry store the mapping of dst mac and forwarding port
-                    PortNumber dstPort = bridgeTable.get(recDevId).get(dstMac);
-                    installRule(context, dstPort);
-                    log.info("MAC address `{}` is matched on `{}`. Install a flow rule.", dstMac, recDevId);
+            // Any to Intra
+            } else if (prefix65100.contains(dstIp) || prefix65100v6.contains(dstIp)) {
+                MacAddress nextHopMac = interfaceService.getMatchingInterface(dstIp).mac();
+                if (nextHopMac == null) {
+                    log.warn("[Routing] Next Hop Mac Loss: {}", dstIp);
+                    context.block();
+                    return;
                 }
+                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
+
+                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(dstIp).connectPoint();
+                if (nextHopCp == null) {
+                    log.warn("[Routing] Next Hop Cp Loss: {}", dstIp);
+                    context.block();
+                    return;
+                }
+                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+
+                installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac, prefixLen);
+
+                // Emit packet
+                ethPkt.setSourceMACAddress(vrouterMac);
+                ethPkt.setDestinationMACAddress(nextHopMac);
+                packetService.emit(new DefaultOutboundPacket(
+                    nextHopCp.deviceId(),
+                    DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
+                    ByteBuffer.wrap(ethPkt.serialize())
+                ));
             }
 
         }
     }
 
-    private void flood(PacketContext context) {
-        packetOut(context, PortNumber.FLOOD);
-    }
+    // Ordered list of switches in the topology
+    private final List<DeviceId> switchOrder = Arrays.asList(ovs1, ovs2, ovs3);
 
-    private void packetOut(PacketContext context, PortNumber portNumber) {
-        context.treatmentBuilder().setOutput(portNumber);
-        context.send();
-    }
+    private void installPath(ConnectPoint recvCp, ConnectPoint nextHopCp,
+                             PacketContext context, MacAddress curHopMac, MacAddress nextHopMac, int prefixLen) {
+        // Parse the packet
+        Ethernet ethPkt = (Ethernet) context.inPacket().parsed();
+        if (ethPkt.getEtherType() != Ethernet.TYPE_IPV4) {
+            return; // Not IPv4, abort
+        }
 
-    private void installRule(PacketContext context, PortNumber dstPortNumber) {
-        InboundPacket pkt = context.inPacket();
-        Ethernet ethPkt = pkt.parsed();
-        DeviceId recDevId = pkt.receivedFrom().deviceId();
         MacAddress srcMac = ethPkt.getSourceMAC();
         MacAddress dstMac = ethPkt.getDestinationMAC();
+        IPv4 ipv4 = (IPv4) ethPkt.getPayload();
+        IpAddress dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
 
-        TrafficSelector selector = DefaultTrafficSelector.builder()
-                .matchEthSrc(srcMac)
-                .matchEthDst(dstMac)
-                .build();
+        DeviceId startDevice = recvCp.deviceId();
+        DeviceId endDevice = nextHopCp.deviceId();
 
-        TrafficTreatment treatment = DefaultTrafficTreatment.builder()
-                .setOutput(dstPortNumber)
-                .build();
+        // Get path
+        List<DeviceId> path = getPath(startDevice, endDevice);
+        if (path == null || path.isEmpty()) {
+            log.info("DEBUG: NO PATH");
+            return;
+        }
 
-        FlowRule flowRule = DefaultFlowRule.builder()
-                .forDevice(recDevId)
-                .withSelector(selector)
-                .withTreatment(treatment)
-                .withPriority(30)
-                .makeTemporary(30) // 30 seconds timeout
-                .fromApp(appId)
-                .build();
+        if (path.size() == 1) {
+            // Same switch
+            TrafficSelector selector = DefaultTrafficSelector.builder()
+                    .matchEthSrc(srcMac)
+                    .matchEthDst(dstMac)
+                    .matchEthType(Ethernet.TYPE_IPV4)
+                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
+                    .build();
 
-        flowRuleService.applyFlowRules(flowRule);
+            TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                    .setEthSrc(curHopMac)
+                    .setEthDst(nextHopMac)
+                    .setOutput(nextHopCp.port())
+                    .build();
 
-        // ForwardingObjective forwardingObjective = DefaultForwardingObjective.builder()
-        //         .withSelector(selector)
-        //         .withTreatment(treatment)
-        //         .withPriority(30)
-        //         .withFlag(ForwardingObjective.Flag.VERSATILE)
-        //         .makeTemporary(30)
-        //         .fromApp(appId)
-        //         .add();
+            FlowRule rule = DefaultFlowRule.builder()
+                    .forDevice(startDevice)
+                    .withSelector(selector)
+                    .withTreatment(treatment)
+                    .withPriority(50)
+                    .makeTemporary(30)
+                    .fromApp(appId)
+                    .build();
 
-        // flowObjectiveService.forward(recDevId, forwardingObjective);
+            flowRuleService.applyFlowRules(rule);
+            log.info("[Routing] Install path on {} for dstIp: {}", startDevice, dstIp);
+        } else {
+            // Multiple switches
+            // Install on first switch
+            PortNumber firstOutPort = getConnectPort(path.get(0), path.get(1));
+            if (firstOutPort == null) {
+                return;
+            }
 
-        packetOut(context, dstPortNumber);
+            TrafficSelector firstSelector = DefaultTrafficSelector.builder()
+                    .matchEthSrc(srcMac)
+                    .matchEthDst(dstMac)
+                    .matchEthType(Ethernet.TYPE_IPV4)
+                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
+                    .build();
+
+            TrafficTreatment firstTreatment = DefaultTrafficTreatment.builder()
+                    .setEthSrc(curHopMac)
+                    .setEthDst(nextHopMac)
+                    .setOutput(firstOutPort)
+                    .build();
+
+            FlowRule firstRule = DefaultFlowRule.builder()
+                    .forDevice(path.get(0))
+                    .withSelector(firstSelector)
+                    .withTreatment(firstTreatment)
+                    .withPriority(50)
+                    .makeTemporary(30)
+                    .fromApp(appId)
+                    .build();
+
+            flowRuleService.applyFlowRules(firstRule);
+            log.info("[Routing] Install path on {} for dstIp: {}", path.get(0), dstIp);
+
+            // Install on intermediate switches
+            for (int i = 1; i < path.size() - 1; i++) {
+                DeviceId curr = path.get(i);
+                PortNumber outPort = getConnectPort(curr, path.get(i + 1));
+                if (outPort == null) {
+                    return;
+                }
+
+                TrafficSelector selector = DefaultTrafficSelector.builder()
+                        .matchEthSrc(curHopMac)
+                        .matchEthDst(nextHopMac)
+                        .matchEthType(Ethernet.TYPE_IPV4)
+                        .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
+                        .build();
+
+                TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                        .setOutput(outPort)
+                        .build();
+
+                FlowRule rule = DefaultFlowRule.builder()
+                        .forDevice(curr)
+                        .withSelector(selector)
+                        .withTreatment(treatment)
+                        .withPriority(50)
+                        .makeTemporary(30)
+                        .fromApp(appId)
+                        .build();
+
+                flowRuleService.applyFlowRules(rule);
+                log.info("[Routing] Install path on {} for dstIp: {}", curr, dstIp);
+            }
+            DeviceId curr = path.get(path.size() - 1);
+
+            TrafficSelector selector = DefaultTrafficSelector.builder()
+                    .matchEthSrc(curHopMac)
+                    .matchEthDst(nextHopMac)
+                    .matchEthType(Ethernet.TYPE_IPV4)
+                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
+                    .build();
+
+            TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                    .setOutput(nextHopCp.port())
+                    .build();
+
+            FlowRule rule = DefaultFlowRule.builder()
+                    .forDevice(curr)
+                    .withSelector(selector)
+                    .withTreatment(treatment)
+                    .withPriority(50)
+                    .makeTemporary(30)
+                    .fromApp(appId)
+                    .build();
+
+            flowRuleService.applyFlowRules(rule);
+            log.info("[Routing] Install path on {} for dstIp: {}", curr, dstIp);
+        }
+    }
+
+    private List<DeviceId> getPath(DeviceId start, DeviceId end) {
+        int startIdx = switchOrder.indexOf(start);
+        int endIdx = switchOrder.indexOf(end);
+        if (startIdx == -1 || endIdx == -1) {
+            return null;
+        }
+        if (startIdx <= endIdx) {
+            return new ArrayList<>(switchOrder.subList(startIdx, endIdx + 1));
+        } else {
+            // Reverse path
+            List<DeviceId> path = new ArrayList<>(switchOrder.subList(endIdx, startIdx + 1));
+            java.util.Collections.reverse(path);
+            return path;
+        }
+    }
+
+    private PortNumber getConnectPort(DeviceId from, DeviceId to) {
+        if (from.equals(ovs1) && to.equals(ovs2)) {
+            return PortNumber.portNumber(2);
+        } else if (from.equals(ovs2) && to.equals(ovs1)) {
+            return PortNumber.portNumber(2);
+        } else if (from.equals(ovs2) && to.equals(ovs3)) {
+            return PortNumber.portNumber(3);
+        } else if (from.equals(ovs3) && to.equals(ovs2)) {
+            return PortNumber.portNumber(1);
+        }
+        return null;
     }
 }

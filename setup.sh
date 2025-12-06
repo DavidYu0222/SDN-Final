@@ -84,6 +84,7 @@ function create_topology() {
     docker exec h1 ip -6 addr add 2a0b:4e07:c4:10::2/64 dev eth-h1
     docker exec h2 ip addr add 172.16.10.3/24 dev eth-h2
     docker exec h2 ip -6 addr add 2a0b:4e07:c4:10::3/64 dev eth-h2
+    docker exec frr ip link set dev eth-frr address 82:3b:ec:e9:2e:d4
     docker exec frr ip addr add 172.16.10.69/24 dev eth-frr
     docker exec frr ip addr add 192.168.63.1/24 dev eth-frr
     docker exec frr ip addr add 192.168.70.10/24 dev eth-frr
@@ -211,6 +212,7 @@ case "$1" in
         install_bridge_app
         # wg-quick up wg0
         sleep 10
+        docker exec router ip neigh flush all
         # install_flow_rule
         ;;
     down)

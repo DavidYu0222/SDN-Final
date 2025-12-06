@@ -167,34 +167,57 @@ docker inspect -f '{{.State.Pid}}' < container name / container id >
 docker inspect -f '{{.State.Pid}}' h1
 ```
 
-freq
+#### Run project
 ```bash
+wg-quick up wg0
 make deploy
 make clean
+wg-quick down wg0
+```
 
+#### Network tools
+```bash
 ip a
+ip -br -c a
 ip route
 ip -6 route
 
 ip neigh
 ip neigh flush all
 
-ip -br -c a
-onos onos@localhost
-rocks
-onos@root > routes
+ping 172.17.10.2
+ping -6 2a0b:4e07:c4:110::2
+```
 
+#### Dashboard
 http://140.113.60.186:8880/lg
 
-curl -u onos:rocks -X POST -H 'Content-Type: application/json' -d @config/flow_ovs2.json 'http://localhost:8181/onos/v1/flows/of:0000011155014202'
+#### Onos api
+```bash
+# Install Flow rule
+curl -u onos:rocks -X POST -H 'Content-Type: application/json' \
+-d @config/flow_ovs2.json 'http://localhost:8181/onos/v1/flows/of:0000011155014202'
 
+# Network config
 onos-netcfg localhost ./config/proxyndp.json
 onos-netcfg localhost ./config/WANConnectionPoint
+```
+
+#### Onos terminal
+```bash
+onos onos@localhost
+rocks
 onos@root > interfaces
 
 onos@root > routes
 onos@root > hosts | grep 192.168.63.1
 
+onos@root > apps -a -s
+onos@root > app deactivate nycu.winlab.vrouter
+onos@root > app uninstall nycu.winlab.vrouter
+
+onos@root > logout
+Ctrl + D
 ```
 
 ## Final
@@ -202,8 +225,8 @@ change frr ip from 172.16.10.1 to 172.16.10.69
 disable ip forward on frr
 
 bgp port 179
-router:xxx (AS65101) <-> frr:179 (AS65100)
-frr:xxx    (AS65100) <-> IXP:179 (AS65000)
+router:xxx (AS65101) <-> frr:179 (AS65100) passive
+frr:xxx    (AS65100) <-> IXP:179 (AS65000) passive
 
 
 ### issue
@@ -244,7 +267,9 @@ Target Address: fd63::2
 ICMPv6 Option (Source link-layer address : 00:00:00:00:00:04) Type: Source link-layer address (1) Length: 1 (8 bytes) Link-layer address: 00:00:00_00:00:04 (00:00:00:00:00:04)
 ```
 
-Block the packet on ovs2 port 3
+##### In Lab6 Solution
+ovs routing base on Learning Bridge
+Block the packet on ovs3 port 3
 ```json
 {
   "priority": 50000,
@@ -268,3 +293,16 @@ Block the packet on ovs2 port 3
 }
 ```
 
+##### In Final Solution
+Implement the firewall in proxyndp to block the 192.168.63.0/24, fd63::/64 directly.
+
+
+#### Vrouter try method
+
+1. Point-To-Point Intent
+  Intent has no timeout. There will be a lot of intent in onos.
+2. Learning Bridge base
+  There are many stupid packet from outside. Learn the wrong mac.
+3. RouteService LogestPrefixMatch().nextHopMac
+  The onos host provider learn/provide the wrong mac cause the nextHopMac return the wrong mac address.
+  Ip ConnectPoint table learn the wrong cp, too.

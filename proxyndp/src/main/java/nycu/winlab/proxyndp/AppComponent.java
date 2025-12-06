@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-// import java.util.Set;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
@@ -45,6 +44,7 @@ import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.TrafficSelector;
 
 import org.onosproject.net.flow.DefaultTrafficTreatment;
+// import org.onosproject.net.flow.TrafficTreatment;
 
 import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
@@ -80,15 +80,6 @@ import org.onlab.packet.ICMP6;
 import org.onlab.packet.ndp.NeighborSolicitation;
 import org.onlab.packet.ndp.NeighborAdvertisement;
 
-// import org.onosproject.net.intent.IntentService;
-// import org.onosproject.net.intent.PointToPointIntent;
-// import org.onosproject.net.intent.MultiPointToSinglePointIntent;
-// import org.onosproject.net.intent.SinglePointToMultiPointIntent;
-
-// import org.onosproject.net.intf.InterfaceService;
-// import org.onosproject.routeservice.RouteService;
-// import org.onosproject.routeservice.RouteTableId;
-// import org.onosproject.routeservice.ResolvedRoute;
 /**
  * Proxy ARP application component.
  */
@@ -125,6 +116,10 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
     // Table: requestIP -> ConnectPoint(devID, port)
     private Map<IpAddress, ConnectPoint> requestTable = new HashMap<>();
+
+    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
+    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
+    private final DeviceId ovs3 = DeviceId.deviceId("of:0000226f63cd0340");
 
     private final ProxyNdpConfigListener cfgListener = new ProxyNdpConfigListener();
     private final ConfigFactory<ApplicationId, ProxyNdpConfig> factory = new ConfigFactory<>(
@@ -247,8 +242,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     }
 
     private class ProxyNdpProcessor implements PacketProcessor {
-        IpPrefix prefix70 = IpPrefix.valueOf("192.168.70.0/24");
-        IpPrefix prefixFd70 = IpPrefix.valueOf("fd70::/64");
+        // IpPrefix prefix70 = IpPrefix.valueOf("192.168.70.0/24");
+        // IpPrefix prefixFd70 = IpPrefix.valueOf("fd70::/64");
 
         IpAddress my70 = IpAddress.valueOf("192.168.70.10");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
@@ -257,7 +252,6 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
-        DeviceId ovs1Id = DeviceId.deviceId("of:0000011155014201");
         IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
@@ -294,8 +288,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
                 // Block 192.168.63.0/24 from outside
-                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1Id)) {
-                    log.info("[Tag] Skip flood for ARP: {} on {}", dstIp, recDevId);
+                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
+                    //log.info("[Tag] Skip flood for ARP: {} on {}", dstIp, recDevId);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -340,7 +334,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                     ConnectPoint requestHost = requestTable.get(dstIp);
                     if (requestHost != null) {
                         sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
-                        log.info("RECV REPLY. {} <- {} Requested MAC = {}", dstIp, srcIp, srcMac);
+                        //log.info("RECV REPLY. {} <- {} Requested MAC = {}", dstIp, srcIp, srcMac);
                     }
                     //requestTable.remove(dstIp);
                 }
@@ -353,7 +347,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 // Block fd63::/64 from outside
                 IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                 IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1Id)) {
+                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
                     // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                     context.block();
                     return; // don't flood, don't handle this IPv6
@@ -379,7 +373,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         if (ipMacTable.get(srcIp) == null) {
                             ipMacTable.put(srcIp, srcMac);
                         }
-
+                        // requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
                         // Block other AS's NS
                         // if (prefixFd70.contains(dstIp) && !dstIp.equals(myFd70) && !dstIp.equals(ixpFd70)) {
                         //     //log.info("Skip flood for NS: {} in fd70::/64 (except fd70::10)", dstIp);
@@ -430,27 +424,13 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
                             //log.info("RECV REPLY. Requested MAC = {}", srcMac);
                         }
-                        //requestTable.remove(dstIp);
+                        requestTable.remove(dstIp);
                     }
                     // Blocks the outbound packet
                     context.block();
                     return;
                 }
             }
-
-            // // Handle Ipv4
-            // if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
-            //     IpAddress srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
-            //     IpAddress dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
-            //     if (vrouterMac.equals(dstMac)) {
-            //         Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
-            //         if (resolvedRoute.isPresent()) {
-            //             ResolvedRoute route = resolvedRoute.get();
-            //             IpAddress nextHopIp = route.nextHop();
-            //             MacAddress nextHopMac = ipMacTable.get(nextHopIp);
-            //         }
-            //     }
-            // }
         }
     }
 

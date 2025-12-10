@@ -326,20 +326,17 @@ public class AppComponent {
 
             IpAddress srcIp = null;
             IpAddress dstIp = null;
-            int prefixLen = -1;
             if (ethPkt.getEtherType() == Ethernet.TYPE_IPV4) {
                 IPv4 ipv4 = (IPv4) ethPkt.getPayload();
                 if (ipv4 != null) {
                     srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
                     dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
-                    prefixLen = 32;
                 }
             } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
                 if (ipv6 != null) {
                     srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                     dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                    prefixLen = 128;
                 }
             }
 
@@ -370,7 +367,7 @@ public class AppComponent {
                     }
                     log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
 
-                    installPath(recvCp, nextHopCp, context, dstMac, nextHopMac, prefixLen); // dstMac = vrouterMac
+                    installPath(recvCp, nextHopCp, context, dstMac, nextHopMac); // dstMac = vrouterMac
 
                     // Emit packet
                     ethPkt.setSourceMACAddress(dstMac);
@@ -403,7 +400,7 @@ public class AppComponent {
                 }
                 log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
 
-                installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac, prefixLen);
+                installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac);
 
                 // Emit packet
                 ethPkt.setSourceMACAddress(vrouterMac);
@@ -422,17 +419,28 @@ public class AppComponent {
     private final List<DeviceId> switchOrder = Arrays.asList(ovs1, ovs2, ovs3);
 
     private void installPath(ConnectPoint recvCp, ConnectPoint nextHopCp,
-                             PacketContext context, MacAddress curHopMac, MacAddress nextHopMac, int prefixLen) {
+                             PacketContext context, MacAddress curHopMac, MacAddress nextHopMac) {
         // Parse the packet
         Ethernet ethPkt = (Ethernet) context.inPacket().parsed();
-        if (ethPkt.getEtherType() != Ethernet.TYPE_IPV4) {
-            return; // Not IPv4, abort
-        }
 
         MacAddress srcMac = ethPkt.getSourceMAC();
         MacAddress dstMac = ethPkt.getDestinationMAC();
-        IPv4 ipv4 = (IPv4) ethPkt.getPayload();
-        IpAddress dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
+        IpAddress srcIp = null;
+        IpAddress dstIp = null;
+        short ethType = ethPkt.getEtherType();
+        if (ethType == Ethernet.TYPE_IPV4) {
+            IPv4 ipv4 = (IPv4) ethPkt.getPayload();
+            if (ipv4 != null) {
+                srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
+                dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
+            }
+        } else if (ethType == Ethernet.TYPE_IPV6) {
+            IPv6 ipv6 = (IPv6) ethPkt.getPayload();
+            if (ipv6 != null) {
+                srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+            }
+        }
 
         DeviceId startDevice = recvCp.deviceId();
         DeviceId endDevice = nextHopCp.deviceId();
@@ -446,12 +454,16 @@ public class AppComponent {
 
         if (path.size() == 1) {
             // Same switch
-            TrafficSelector selector = DefaultTrafficSelector.builder()
+            TrafficSelector.Builder selector = DefaultTrafficSelector.builder()
                     .matchEthSrc(srcMac)
                     .matchEthDst(dstMac)
-                    .matchEthType(Ethernet.TYPE_IPV4)
-                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
-                    .build();
+                    .matchEthType(ethType);
+            if (ethType == Ethernet.TYPE_IPV4) {
+                selector.matchIPDst(IpPrefix.valueOf(dstIp, 32));
+            } else {
+                selector.matchIPv6Dst(IpPrefix.valueOf(dstIp, 128));
+            }
+
 
             TrafficTreatment treatment = DefaultTrafficTreatment.builder()
                     .setEthSrc(curHopMac)
@@ -461,7 +473,7 @@ public class AppComponent {
 
             FlowRule rule = DefaultFlowRule.builder()
                     .forDevice(startDevice)
-                    .withSelector(selector)
+                    .withSelector(selector.build())
                     .withTreatment(treatment)
                     .withPriority(50)
                     .makeTemporary(30)
@@ -478,12 +490,15 @@ public class AppComponent {
                 return;
             }
 
-            TrafficSelector firstSelector = DefaultTrafficSelector.builder()
+            TrafficSelector.Builder firstSelector = DefaultTrafficSelector.builder()
                     .matchEthSrc(srcMac)
                     .matchEthDst(dstMac)
-                    .matchEthType(Ethernet.TYPE_IPV4)
-                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
-                    .build();
+                    .matchEthType(ethType);
+            if (ethType == Ethernet.TYPE_IPV4) {
+                firstSelector.matchIPDst(IpPrefix.valueOf(dstIp, 32));
+            } else {
+                firstSelector.matchIPv6Dst(IpPrefix.valueOf(dstIp, 128));
+            }
 
             TrafficTreatment firstTreatment = DefaultTrafficTreatment.builder()
                     .setEthSrc(curHopMac)
@@ -493,7 +508,7 @@ public class AppComponent {
 
             FlowRule firstRule = DefaultFlowRule.builder()
                     .forDevice(path.get(0))
-                    .withSelector(firstSelector)
+                    .withSelector(firstSelector.build())
                     .withTreatment(firstTreatment)
                     .withPriority(50)
                     .makeTemporary(30)
@@ -511,12 +526,15 @@ public class AppComponent {
                     return;
                 }
 
-                TrafficSelector selector = DefaultTrafficSelector.builder()
+                TrafficSelector.Builder selector = DefaultTrafficSelector.builder()
                         .matchEthSrc(curHopMac)
                         .matchEthDst(nextHopMac)
-                        .matchEthType(Ethernet.TYPE_IPV4)
-                        .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
-                        .build();
+                        .matchEthType(ethType);
+                if (ethType == Ethernet.TYPE_IPV4) {
+                    selector.matchIPDst(IpPrefix.valueOf(dstIp, 32));
+                } else {
+                    selector.matchIPv6Dst(IpPrefix.valueOf(dstIp, 128));
+                }
 
                 TrafficTreatment treatment = DefaultTrafficTreatment.builder()
                         .setOutput(outPort)
@@ -524,7 +542,7 @@ public class AppComponent {
 
                 FlowRule rule = DefaultFlowRule.builder()
                         .forDevice(curr)
-                        .withSelector(selector)
+                        .withSelector(selector.build())
                         .withTreatment(treatment)
                         .withPriority(50)
                         .makeTemporary(30)
@@ -536,12 +554,15 @@ public class AppComponent {
             }
             DeviceId curr = path.get(path.size() - 1);
 
-            TrafficSelector selector = DefaultTrafficSelector.builder()
+            TrafficSelector.Builder selector = DefaultTrafficSelector.builder()
                     .matchEthSrc(curHopMac)
                     .matchEthDst(nextHopMac)
-                    .matchEthType(Ethernet.TYPE_IPV4)
-                    .matchIPDst(IpPrefix.valueOf(dstIp, prefixLen))
-                    .build();
+                    .matchEthType(ethType);
+            if (ethType == Ethernet.TYPE_IPV4) {
+                selector.matchIPDst(IpPrefix.valueOf(dstIp, 32));
+            } else {
+                selector.matchIPv6Dst(IpPrefix.valueOf(dstIp, 128));
+            }
 
             TrafficTreatment treatment = DefaultTrafficTreatment.builder()
                     .setOutput(nextHopCp.port())
@@ -549,7 +570,7 @@ public class AppComponent {
 
             FlowRule rule = DefaultFlowRule.builder()
                     .forDevice(curr)
-                    .withSelector(selector)
+                    .withSelector(selector.build())
                     .withTreatment(treatment)
                     .withPriority(50)
                     .makeTemporary(30)

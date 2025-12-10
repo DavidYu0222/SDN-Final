@@ -306,3 +306,11 @@ Implement the firewall in proxyndp to block the 192.168.63.0/24, fd63::/64 direc
 3. RouteService LogestPrefixMatch().nextHopMac
   The onos host provider learn/provide the wrong mac cause the nextHopMac return the wrong mac address.
   Ip ConnectPoint table learn the wrong cp, too.
+
+#### IPV6 h3 ping h1,h2
+
+h3 will successfully ping h1 for a while, then stop for a while.
+
+The problem is on h3's and router's cache expiry frequently.
+
+Don't remove the link local address of h3 and router.

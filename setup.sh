@@ -7,7 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 # BRIDGE_APP_PATH="${HOME}/SDN/Lab5/bridge-app/target/bridge-app-1.0-SNAPSHOT.oar"
-BRIDGE_APP_PATH="./vrouter/target/vrouter-1.0-SNAPSHOT.oar"
+VROUTER_APP_PATH="./vrouter/target/vrouter-1.0-SNAPSHOT.oar"
 PROXYNDP_APP_PATH="./proxyndp/target/proxyndp-1.0-SNAPSHOT.oar"
 
 function delete_link_local_ipv6() {
@@ -47,12 +47,12 @@ function create_topology() {
     sudo ovs-vsctl add-br ovs2 -- set bridge ovs2 protocols=OpenFlow14 -- set-controller ovs2 tcp:192.168.100.1:6653 -- set bridge ovs2 other-config:datapath-id=0000011155014202
 
     echo -e "${YELLOW}Creating veth pairs...${NC}"
-    sudo ip link add veth-h1 type veth peer name eth-h1 || true
-    sudo ip link add veth-h2 type veth peer name eth-h2 || true
-    sudo ip link add veth-ovs1 type veth peer name veth-ovs2 || true
-    sudo ip link add veth-frr type veth peer name eth-frr || true
-    sudo ip link add veth-r type veth peer name eth-r || true
-    sudo ip link add veth-h3 type veth peer name eth-h3 || true
+    sudo ip link add veth-h1 mtu 1360 type veth peer name eth-h1 mtu 1360 || true
+    sudo ip link add veth-h2 mtu 1360 type veth peer name eth-h2 mtu 1360 || true
+    sudo ip link add veth-ovs1 mtu 1360 type veth peer name veth-ovs2 mtu 1360 || true
+    sudo ip link add veth-frr mtu 1360 type veth peer name eth-frr mtu 1360 || true
+    sudo ip link add veth-r mtu 1360 type veth peer name eth-r mtu 1360 || true
+    sudo ip link add veth-h3 mtu 1360 type veth peer name eth-h3 mtu 1360 || true
 
     echo -e "${YELLOW}Connecting veths to OVS...${NC}"
     sudo ovs-vsctl add-port ovs1 veth-h1 || true
@@ -109,13 +109,14 @@ function create_topology() {
     echo -e "${GREEN}Delete link local.${NC}"
     delete_link_local_ipv6 frr eth-frr
     delete_link_local_ipv6 router eth-r
-    delete_link_local_ipv6 router veth-h3
+    delete_link_local_ipv6 h1 eth-h1
+    delete_link_local_ipv6 h2 eth-h2
 
     echo -e "${GREEN}Topology deployed successfully.${NC}"
 }
 
 function set_route() {
-    echo -e "${GREEN}Set host default route. ${NC}"
+    echo -e "${GREEN}Set host default route.${NC}"
     docker exec h1 ip route del default 
     docker exec h1 ip route add default via 172.16.10.1
     docker exec h1 ip -6 route add default via 2a0b:4e07:c4:10::1
@@ -155,32 +156,31 @@ function clean_topology() {
 
 # -----------------------------------------------------------------------------------
 
-function install_bridge_app() {
-echo -e "${GREEN}Waiting for ONOS to accept app installation...${NC}"
+function install_vrouter_app() {
+    echo -e "${GREEN}Install Virtual Router app to ONOS.${NC}"
 
-until onos-app localhost install! "${BRIDGE_APP_PATH}" 2>&1 | grep -q '"state":"ACTIVE"'; do
-    echo -e "${YELLOW}[WAIT] ONOS not ready yet... retry in 2 seconds${NC}"
-    sleep 2
-done
+    until onos-app localhost install! "${VROUTER_APP_PATH}" 2>&1 | grep -q '"state":"ACTIVE"'; do
+        echo -e "${YELLOW}[WAIT] ONOS not ready yet... retry in 2 seconds${NC}"
+        sleep 2
+    done
 
-echo -e "${GREEN}bridge-app is ACTIVE!${NC}"
+    echo -e "${GREEN}vrouter-app is ACTIVE!${NC}"
 }
 
 function install_proxyndp_app() {
-echo -e "${GREEN}Install Proxy NDP app to ONOS.${NC}"
+    echo -e "${GREEN}Install Proxy NDP app to ONOS.${NC}"
 
-until onos-app localhost install! "${PROXYNDP_APP_PATH}" 2>&1 | grep -q '"state":"ACTIVE"'; do
-    echo -e "${YELLOW}[WAIT] ONOS not ready yet... retry in 2 seconds${NC}"
-    sleep 2
-done
+    until onos-app localhost install! "${PROXYNDP_APP_PATH}" 2>&1 | grep -q '"state":"ACTIVE"'; do
+        echo -e "${YELLOW}[WAIT] ONOS not ready yet... retry in 2 seconds${NC}"
+        sleep 2
+    done
 
-echo -e "${GREEN}proxyndp-app is ACTIVE!${NC}"
+    echo -e "${GREEN}proxyndp-app is ACTIVE!${NC}"
 
-sleep 4
-echo -e "${GREEN}Pass config using netcfg.${NC}"
-onos-netcfg localhost ./config/proxyndp.json
-onos-netcfg localhost ./config/WANConnectPoint.json
-
+    sleep 4
+    echo -e "${GREEN}Pass config using netcfg.${NC}"
+    onos-netcfg localhost ./config/proxyndp.json
+    onos-netcfg localhost ./config/WANConnectPoint.json
 }
 
 # To prevent the host provider learn wrong ip src
@@ -209,7 +209,7 @@ case "$1" in
         create_topology
         set_route
         install_proxyndp_app
-        install_bridge_app
+        install_vrouter_app
         # wg-quick up wg0
         sleep 10
         docker exec router ip neigh flush all

@@ -288,8 +288,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
                 // Block 192.168.63.0/24 from outside
-                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
-                    //log.info("[Tag] Skip flood for ARP: {} on {}", dstIp, recDevId);
+                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && recDevId.equals(ovs3)) {
+                    log.info("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -311,7 +311,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 // Firewall
                 if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !prefix63.contains(dstIp) &&
                     !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
-                    //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                    //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -343,28 +343,25 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 return;
             } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
-
-                // Block fd63::/64 from outside
-                IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-                IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
-                    // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
-                    context.block();
-                    return; // don't flood, don't handle this IPv6
-                }
-
                 if (ipv6.getNextHeader() == IPv6.PROTOCOL_ICMP6) {
                     MacAddress srcMac = ethPkt.getSourceMAC();
                     IpAddress srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-
-                    // [CHANGE] Learn host info immediately from incoming IPv6 packet
-                    learnHost(srcIp, srcMac, vlan, recDevId, recPort);
-
                     ICMP6 icmp6 = (ICMP6) ipv6.getPayload();
                     byte icmpType = icmp6.getIcmpType();
-
                     // Handle NDP (A -> B) Neighbor Solicitation
                     if (icmpType == ICMP6.NEIGHBOR_SOLICITATION) {
+                        // Block fd63::/64 from outside
+                        IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                        IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
+                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                            context.block();
+                            return; // don't flood, don't handle this IPv6
+                        }
+
+                        // [CHANGE] Learn host info immediately from incoming IPv6 packet
+                        learnHost(srcIp, srcMac, vlan, recDevId, recPort);
+
                         // Get Taget IP from NS
                         NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
@@ -383,7 +380,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
-                            //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                            //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
@@ -403,7 +400,22 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             sendReply(ndpReply, recDevId, recPort);
                             log.info("NDP TABLE HIT. {} -> {}, Requested MAC = {}", srcIp, dstIp, targetMac);
                         }
+                        // Blocks the outbound packet
+                        context.block();
+                        return;
                     } else if (icmpType == ICMP6.NEIGHBOR_ADVERTISEMENT) {
+                        // Block fd63::/64 from outside
+                        IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
+                        IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
+                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                            context.block();
+                            return; // don't flood, don't handle this IPv6
+                        }
+
+                        // [CHANGE] Learn host info immediately from incoming IPv6 packet
+                        learnHost(srcIp, srcMac, vlan, recDevId, recPort);
+
                         // Add src to table
                         if (ipMacTable.get(srcIp) == null) {
                             ipMacTable.put(srcIp, srcMac);
@@ -415,7 +427,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
-                            //log.info("Skip flood for ARP: {} in 192.168.70.0/24 (except 192.168.70.10)", dstIp);
+                            //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
@@ -425,10 +437,10 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             //log.info("RECV REPLY. Requested MAC = {}", srcMac);
                         }
                         requestTable.remove(dstIp);
+                        // Blocks the outbound packet
+                        context.block();
+                        return;
                     }
-                    // Blocks the outbound packet
-                    context.block();
-                    return;
                 }
             }
         }

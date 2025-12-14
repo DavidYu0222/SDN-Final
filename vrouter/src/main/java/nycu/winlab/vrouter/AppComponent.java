@@ -23,8 +23,6 @@ import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Optional;
@@ -119,7 +117,6 @@ public class AppComponent {
 
     private RouteProcessor processor = new RouteProcessor();
     private ApplicationId appId;
-    private Map<DeviceId, Map<MacAddress, PortNumber>> bridgeTable = new HashMap<>();
     private MacAddress vrouterMac = MacAddress.valueOf("00:00:00:00:00:10");
     private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
     private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
@@ -267,10 +264,10 @@ public class AppComponent {
         IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
         // My network
-        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
-        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
-        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
-        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+        IpPrefix prefix65xx0 = IpPrefix.valueOf("172.16.10.0/24");
+        IpPrefix prefix65xx1 = IpPrefix.valueOf("172.17.10.0/24");
+        IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
+        IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
 
         @Override
         public void process(PacketContext context) {
@@ -291,18 +288,6 @@ public class AppComponent {
             ConnectPoint recvCp = new ConnectPoint(recDevId, recPort);
             MacAddress srcMac = ethPkt.getSourceMAC();
             MacAddress dstMac = ethPkt.getDestinationMAC();
-
-            // // rec packet-in from new device, create new table for it
-            // if (bridgeTable.get(recDevId) == null) {
-            //     bridgeTable.put(recDevId, new HashMap<>());
-            // }
-
-            // if (bridgeTable.get(recDevId).get(srcMac) == null) {
-            //     // the mapping of pkt's src mac and receivedfrom port wasn't store in the table of the rec device
-            //     bridgeTable.get(recDevId).put(srcMac, recPort);
-            //     log.info("Add an entry to the port table of `{}`. MAC address: `{}` => Port: `{}`.",
-            //             recDevId, srcMac, recPort);
-            // }
 
             // This handle by ProxyNdp App
             if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
@@ -383,7 +368,7 @@ public class AppComponent {
                     return;
                 }
             // Any to Intra
-            } else if (prefix65100.contains(dstIp) || prefix65100v6.contains(dstIp)) {
+            } else if (prefix65xx0.contains(dstIp) || prefix65xx0v6.contains(dstIp)) {
                 MacAddress nextHopMac = interfaceService.getMatchingInterface(dstIp).mac();
                 if (nextHopMac == null) {
                     log.warn("[Routing] Next Hop Mac Loss: {}", dstIp);

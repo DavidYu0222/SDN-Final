@@ -396,7 +396,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                         IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
                         if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
-                            //log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6
                         }
@@ -414,7 +414,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
-                            log.info("[DEBUG] Skip flood for NA: {}", dstIp);
+                            //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }

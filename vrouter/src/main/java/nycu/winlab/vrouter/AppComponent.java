@@ -67,7 +67,7 @@ import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.FilteredConnectPoint;
 
 import org.onosproject.net.intent.IntentService;
-// import org.onosproject.net.intent.PointToPointIntent;
+import org.onosproject.net.intent.PointToPointIntent;
 import org.onosproject.net.intent.MultiPointToSinglePointIntent;
 import org.onosproject.net.intent.SinglePointToMultiPointIntent;
 
@@ -190,7 +190,6 @@ public class AppComponent {
         FilteredConnectPoint wan3 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155014202/4"));
         wanCps.add(wan1);
         wanCps.add(wan2);
-        wanCps.add(wan3);
 
         // 1) wan to speaker (ipv4)
         TrafficSelector bgpIpv4Selector = DefaultTrafficSelector.builder()
@@ -240,6 +239,38 @@ public class AppComponent {
 
         intentService.submit(speaker2WanIpv4Intent);
         intentService.submit(speaker2WanIpv6Intent);
+
+        PointToPointIntent wan3Ipv4Intent1 = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)   // ingress
+            .filteredEgressPoint(wan3)          // egress
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf("192.168.70.10/32"))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.11/32"))
+                .build()
+            )
+            .priority(110)
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        PointToPointIntent wan3Ipv4Intent2 = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(wan3)         // ingress
+            .filteredEgressPoint(bgpSpeaker)    // egress
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf("192.168.70.11/32"))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.10/32"))
+                .build()
+            )
+            .priority(110)
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+        intentService.submit(wan3Ipv4Intent1);
+        intentService.submit(wan3Ipv4Intent2);
     }
 
     // private class VRouterConfigListener implements NetworkConfigListener {
@@ -341,6 +372,7 @@ public class AppComponent {
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
                     IpAddress nextHopIp = route.nextHop();
+                    log.info("[Routing] Next Hop IP: {}", nextHopIp);
                     MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
                     if (nextHopMac == null) {
                         log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);

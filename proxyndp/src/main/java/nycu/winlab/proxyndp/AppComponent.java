@@ -117,9 +117,9 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     // Table: requestIP -> ConnectPoint(devID, port)
     private Map<IpAddress, ConnectPoint> requestTable = new HashMap<>();
 
-    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
-    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
-    private final DeviceId ovs3 = DeviceId.deviceId("of:0000226f63cd0340");
+    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155008801");
+    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155008802");
+    private final DeviceId ovs3 = DeviceId.deviceId("of:0000c61549ed5941");
 
     private final ProxyNdpConfigListener cfgListener = new ProxyNdpConfigListener();
     private final ConfigFactory<ApplicationId, ProxyNdpConfig> factory = new ConfigFactory<>(
@@ -242,10 +242,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     }
 
     private class ProxyNdpProcessor implements PacketProcessor {
-        IpAddress my70 = IpAddress.valueOf("192.168.70.10");
+        IpAddress my70 = IpAddress.valueOf("192.168.70.11");
+        IpAddress peerA70 = IpAddress.valueOf("192.168.70.10");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
-        IpAddress myFd70 = IpAddress.valueOf("fd70::10");
+        IpAddress myFd70 = IpAddress.valueOf("fd70::11");
+        IpAddress peerAFd70 = IpAddress.valueOf("fd70::10");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
@@ -253,10 +255,10 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
         // My network
-        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
-        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
-        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
-        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.11.0/24");
+        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.11.0/24");
+        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:11::/64");
+        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:111::/64");
 
         @Override
         public void process(PacketContext context) {
@@ -285,7 +287,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
                 // Block 192.168.63.0/24 from outside
-                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && recDevId.equals(ovs3)) {
+                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
                     log.info("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
                     context.block();
                     return; // don't flood, don't handle this ARP
@@ -300,8 +302,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 }
 
                 // Firewall whitelist
-                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !prefix63.contains(dstIp) &&
-                    !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
+                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) &&
+                    !prefix63.contains(dstIp) && !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
@@ -345,7 +347,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Block fd63::/64 from outside
                         IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                         IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
                             log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6
@@ -393,7 +395,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Block fd63::/64 from outside
                         IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                         IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
                             log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6

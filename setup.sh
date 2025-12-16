@@ -43,8 +43,8 @@ function create_topology() {
     echo -e "${YELLOW}Creating OVS bridges...${NC}"
     sudo ovs-vsctl --if-exists del-br ovs1
     sudo ovs-vsctl --if-exists del-br ovs2
-    sudo ovs-vsctl add-br ovs1 -- set bridge ovs1 protocols=OpenFlow14 -- set-controller ovs1 tcp:192.168.100.1:6653 -- set bridge ovs1 other-config:datapath-id=0000011155014201
-    sudo ovs-vsctl add-br ovs2 -- set bridge ovs2 protocols=OpenFlow14 -- set-controller ovs2 tcp:192.168.100.1:6653 -- set bridge ovs2 other-config:datapath-id=0000011155014202
+    sudo ovs-vsctl add-br ovs1 -- set bridge ovs1 protocols=OpenFlow14 -- set-controller ovs1 tcp:192.168.100.1:6653 -- set bridge ovs1 other-config:datapath-id=0000011155008801
+    sudo ovs-vsctl add-br ovs2 -- set bridge ovs2 protocols=OpenFlow14 -- set-controller ovs2 tcp:192.168.100.1:6653 -- set bridge ovs2 other-config:datapath-id=0000011155008802
 
     echo -e "${YELLOW}Creating veth pairs...${NC}"
     sudo ip link add veth-h1 mtu 1360 type veth peer name eth-h1 mtu 1360 || true
@@ -61,7 +61,8 @@ function create_topology() {
     sudo ovs-vsctl add-port ovs2 veth-ovs2 || true
     sudo ovs-vsctl add-port ovs1 veth-frr || true
     sudo ovs-vsctl add-port ovs1 veth-r || true
-    sudo ovs-vsctl add-port ovs2 TO_TA_VXLAN -- set interface TO_TA_VXLAN type=vxlan options:remote_ip=192.168.60.10
+    sudo ovs-vsctl add-port ovs2 TO_TA_VXLAN -- set interface TO_TA_VXLAN type=vxlan options:remote_ip=192.168.60.11
+    sudo ovs-vsctl add-port ovs2 TO_10_VXLAN -- set interface TO_10_VXLAN type=vxlan options:remote_ip=192.168.61.10 options:key=222
 
     echo -e "${YELLOW}Setting veths up...${NC}"
     sudo ip link set veth-h1 up
@@ -80,23 +81,26 @@ function create_topology() {
     sudo ip link set eth-h3 netns $(docker inspect -f '{{.State.Pid}}' h3)
 
     echo -e "${YELLOW}Assigning IPs inside containers...${NC}"
-    docker exec h1 ip addr add 172.16.10.2/24 dev eth-h1
-    docker exec h1 ip -6 addr add 2a0b:4e07:c4:10::2/64 dev eth-h1
-    docker exec h2 ip addr add 172.16.10.3/24 dev eth-h2
-    docker exec h2 ip -6 addr add 2a0b:4e07:c4:10::3/64 dev eth-h2
-    docker exec frr ip link set dev eth-frr address 82:3b:ec:e9:2e:d4
-    docker exec frr ip addr add 172.16.10.69/24 dev eth-frr
+    docker exec h1 ip link set dev eth-h1 address 00:00:00:88:00:02
+    docker exec h1 ip addr add 172.16.11.2/24 dev eth-h1
+    docker exec h1 ip -6 addr add 2a0b:4e07:c4:11::2/64 dev eth-h1
+    docker exec h2 ip link set dev eth-h2 address 00:00:00:88:00:03
+    docker exec h2 ip addr add 172.16.11.3/24 dev eth-h2
+    docker exec h2 ip -6 addr add 2a0b:4e07:c4:11::3/64 dev eth-h2
+    docker exec frr ip link set dev eth-frr address 00:00:00:88:00:69
+    docker exec frr ip addr add 172.16.11.69/24 dev eth-frr
     docker exec frr ip addr add 192.168.63.1/24 dev eth-frr
-    docker exec frr ip addr add 192.168.70.10/24 dev eth-frr
-    docker exec frr ip -6 addr add 2a0b:4e07:c4:10::69/64 dev eth-frr
+    docker exec frr ip addr add 192.168.70.11/24 dev eth-frr
+    docker exec frr ip -6 addr add 2a0b:4e07:c4:11::69/64 dev eth-frr
     docker exec frr ip -6 addr add fd63::1/64 dev eth-frr
-    docker exec frr ip -6 addr add fd70::10/64 dev eth-frr
+    docker exec frr ip -6 addr add fd70::11/64 dev eth-frr
+    docker exec router ip link set dev eth-r address 00:00:00:88:00:01
     docker exec router ip addr add 192.168.63.2/24 dev eth-r
-    docker exec router ip addr add 172.17.10.1/24 dev veth-h3
+    docker exec router ip addr add 172.17.11.1/24 dev veth-h3
     docker exec router ip -6 addr add fd63::2/64 dev eth-r
-    docker exec router ip -6 addr add 2a0b:4e07:c4:110::1/64 dev veth-h3
-    docker exec h3 ip addr add 172.17.10.2/24 dev eth-h3
-    docker exec h3 ip -6 addr add 2a0b:4e07:c4:110::2/64 dev eth-h3
+    docker exec router ip -6 addr add 2a0b:4e07:c4:111::1/64 dev veth-h3
+    docker exec h3 ip addr add 172.17.11.2/24 dev eth-h3
+    docker exec h3 ip -6 addr add 2a0b:4e07:c4:111::2/64 dev eth-h3
 
     echo -e "${YELLOW}Bringing container interfaces up...${NC}"
     docker exec h1 ip link set eth-h1 up
@@ -118,14 +122,14 @@ function create_topology() {
 function set_route() {
     echo -e "${GREEN}Set host default route.${NC}"
     docker exec h1 ip route del default 
-    docker exec h1 ip route add default via 172.16.10.1
-    docker exec h1 ip -6 route add default via 2a0b:4e07:c4:10::1
+    docker exec h1 ip route add default via 172.16.11.1
+    docker exec h1 ip -6 route add default via 2a0b:4e07:c4:11::1
     docker exec h2 ip route del default 
-    docker exec h2 ip route add default via 172.16.10.1
-    docker exec h2 ip -6 route add default via 2a0b:4e07:c4:10::1
+    docker exec h2 ip route add default via 172.16.11.1
+    docker exec h2 ip -6 route add default via 2a0b:4e07:c4:11::1
     docker exec h3 ip route del default 
-    docker exec h3 ip route add default via 172.17.10.1
-    docker exec h3 ip -6 route add default via 2a0b:4e07:c4:110::1
+    docker exec h3 ip route add default via 172.17.11.1
+    docker exec h3 ip -6 route add default via 2a0b:4e07:c4:111::1
 
     echo -e "${YELLOW}Set route router(AS65101) - frr(AS65100) ${NC}"
     docker exec router ip route add 192.168.70.0/24 via 192.168.63.1 dev eth-r
@@ -147,7 +151,6 @@ function clean_topology() {
     sudo ip link del veth-h2 2>/dev/null || true
     sudo ip link del veth-ovs1 2>/dev/null || true
     sudo ip link del veth-frr 2>/dev/null || true
-    sudo ip link del veth-frr63 2>/dev/null || true
     sudo ip link del veth-r 2>/dev/null || true
     sudo ip link del veth-h3 2>/dev/null || true
 

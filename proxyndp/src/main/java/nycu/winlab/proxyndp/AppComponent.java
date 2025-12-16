@@ -243,9 +243,11 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
     private class ProxyNdpProcessor implements PacketProcessor {
         IpAddress my70 = IpAddress.valueOf("192.168.70.10");
+        IpAddress peerA70 = IpAddress.valueOf("192.168.70.11");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
         IpAddress myFd70 = IpAddress.valueOf("fd70::10");
+        IpAddress peerAFd70 = IpAddress.valueOf("fd70::11");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
@@ -285,7 +287,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET, arp.getTargetProtocolAddress());
 
                 // Block 192.168.63.0/24 from outside
-                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && recDevId.equals(ovs3)) {
+                if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
                     log.info("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
                     context.block();
                     return; // don't flood, don't handle this ARP
@@ -300,8 +302,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 }
 
                 // Firewall whitelist
-                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !prefix63.contains(dstIp) &&
-                    !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
+                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) &&
+                    !prefix63.contains(dstIp) && !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
@@ -345,7 +347,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Block fd63::/64 from outside
                         IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                         IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
                             log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6
@@ -393,8 +395,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Block fd63::/64 from outside
                         IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                         IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && recDevId.equals(ovs3)) {
-                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
+                            //log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6
                         }
@@ -412,7 +414,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
-                            //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
+                            log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }

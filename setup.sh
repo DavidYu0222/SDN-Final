@@ -62,6 +62,7 @@ function create_topology() {
     sudo ovs-vsctl add-port ovs1 veth-frr || true
     sudo ovs-vsctl add-port ovs1 veth-r || true
     sudo ovs-vsctl add-port ovs2 TO_TA_VXLAN -- set interface TO_TA_VXLAN type=vxlan options:remote_ip=192.168.60.10
+    sudo ovs-vsctl add-port ovs2 TO_11_VXLAN -- set interface TO_11_VXLAN type=vxlan options:remote_ip=192.168.61.11 option:key=222
 
     echo -e "${YELLOW}Setting veths up...${NC}"
     sudo ip link set veth-h1 up
@@ -147,7 +148,6 @@ function clean_topology() {
     sudo ip link del veth-h2 2>/dev/null || true
     sudo ip link del veth-ovs1 2>/dev/null || true
     sudo ip link del veth-frr 2>/dev/null || true
-    sudo ip link del veth-frr63 2>/dev/null || true
     sudo ip link del veth-r 2>/dev/null || true
     sudo ip link del veth-h3 2>/dev/null || true
 

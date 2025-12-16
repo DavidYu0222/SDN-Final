@@ -187,8 +187,10 @@ public class AppComponent {
         Set<FilteredConnectPoint> wanCps = new HashSet<>();
         FilteredConnectPoint wan1 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155014201/4"));
         FilteredConnectPoint wan2 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000226f63cd0340/3"));
+        FilteredConnectPoint wan3 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155014202/4"));
         wanCps.add(wan1);
         wanCps.add(wan2);
+        wanCps.add(wan3);
 
         // 1) wan to speaker (ipv4)
         TrafficSelector bgpIpv4Selector = DefaultTrafficSelector.builder()
@@ -290,6 +292,9 @@ public class AppComponent {
             MacAddress dstMac = ethPkt.getDestinationMAC();
 
             // This handle by ProxyNdp App
+            if (ethPkt.getEtherType() == Ethernet.TYPE_ARP) {
+                return;
+            }
             if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
                 // Block fd63::/64 from outside
@@ -331,7 +336,7 @@ public class AppComponent {
 
             // Intra to Inter
             if (vrouterMac.equals(dstMac)) {
-                //log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
+                log.info("[Routing] SrcIp: {}, DstIp: {}", srcIp, dstIp);
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
@@ -363,7 +368,7 @@ public class AppComponent {
                         ByteBuffer.wrap(ethPkt.serialize())
                     ));
                 } else {
-                    log.warn("ROUTE NOT FOUND for {}", dstIp);
+                    log.warn("[Routing] ROUTE NOT FOUND for {}", dstIp);
                     context.block();
                     return;
                 }

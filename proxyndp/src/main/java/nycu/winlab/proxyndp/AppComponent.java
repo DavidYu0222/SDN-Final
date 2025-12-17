@@ -329,7 +329,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
                         //log.info("RECV REPLY. {} <- {} Requested MAC = {}", dstIp, srcIp, srcMac);
                     }
-                    //requestTable.remove(dstIp);
+                    requestTable.remove(dstIp);
                 }
                 // Blocks the outbound packet
                 context.block();
@@ -366,7 +366,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
 
                         // Firewall whitelist
-                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
+                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
+                            !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
                             context.block();
@@ -412,7 +413,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
 
                         // Firewall whitelist
-                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !prefixFd63.contains(dstIp) &&
+                        if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
+                            !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();

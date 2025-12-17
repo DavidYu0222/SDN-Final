@@ -159,11 +159,6 @@ public class AppComponent {
         packetService.removeProcessor(processor);
         processor = null;
 
-        // // remove flowrule you installed for packet-in
-        // TrafficSelector.Builder selArp = DefaultTrafficSelector.builder();
-        // selArp.matchEthType(Ethernet.TYPE_ARP);
-        // packetService.cancelPackets(selArp.build(), PacketPriority.REACTIVE, appId);
-
         TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
         selv4.matchEthType(Ethernet.TYPE_IPV4);
         packetService.cancelPackets(selv4.build(), PacketPriority.REACTIVE, appId);
@@ -269,8 +264,40 @@ public class AppComponent {
             .priority(110)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
+
+        PointToPointIntent wan3Ipv6Intent1 = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)   // ingress
+            .filteredEgressPoint(wan3)          // egress
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf("fd70::11/128"))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::10/128"))
+                .build()
+            )
+            .priority(110)
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        PointToPointIntent wan3Ipv6Intent2 = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(wan3)         // ingress
+            .filteredEgressPoint(bgpSpeaker)    // egress
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf("fd70::10/128"))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::11/128"))
+                .build()
+            )
+            .priority(110)
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
         intentService.submit(wan3Ipv4Intent1);
         intentService.submit(wan3Ipv4Intent2);
+        intentService.submit(wan3Ipv6Intent1);
+        intentService.submit(wan3Ipv6Intent2);
     }
 
     // private class VRouterConfigListener implements NetworkConfigListener {
@@ -368,7 +395,7 @@ public class AppComponent {
 
             // Intra to Inter
             if (vrouterMac.equals(dstMac)) {
-                //log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
+                log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
@@ -432,6 +459,44 @@ public class AppComponent {
                     DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
                     ByteBuffer.wrap(ethPkt.serialize())
                 ));
+            // Transit Traffic
+            } else {
+                log.info("SrcIp: {}, DstIp: {}", srcIp, dstIp);
+                Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
+                if (resolvedRoute.isPresent()) {
+                    ResolvedRoute route = resolvedRoute.get();
+                    IpAddress nextHopIp = route.nextHop();
+                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
+                    if (nextHopMac == null) {
+                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
+                        context.block();
+                        return;
+                    }
+                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
+
+                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
+                    if (nextHopCp == null) {
+                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
+                        context.block();
+                        return;
+                    }
+                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+
+                    installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac); // dstMac = vrouterMac
+
+                    // Emit packet
+                    ethPkt.setSourceMACAddress(dstMac);
+                    ethPkt.setDestinationMACAddress(nextHopMac);
+                    packetService.emit(new DefaultOutboundPacket(
+                        nextHopCp.deviceId(),
+                        DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
+                        ByteBuffer.wrap(ethPkt.serialize())
+                    ));
+                } else {
+                    log.warn("ROUTE NOT FOUND for {}", dstIp);
+                    context.block();
+                    return;
+                }
             }
 
         }

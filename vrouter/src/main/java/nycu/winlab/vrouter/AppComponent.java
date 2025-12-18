@@ -117,10 +117,10 @@ public class AppComponent {
 
     private RouteProcessor processor = new RouteProcessor();
     private ApplicationId appId;
-    private MacAddress vrouterMac = MacAddress.valueOf("00:00:00:00:00:10");
-    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
-    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
-    private final DeviceId ovs3 = DeviceId.deviceId("of:0000226f63cd0340");
+    private MacAddress vrouterMac = MacAddress.valueOf("00:00:00:00:00:12");
+    private final DeviceId ovs1 = DeviceId.deviceId("of:0000031355101801");
+    private final DeviceId ovs2 = DeviceId.deviceId("of:0000031355101802");
+    private final DeviceId ovs3 = DeviceId.deviceId("of:0000a68674038149");
 
     @Activate
     protected void activate() {
@@ -167,17 +167,17 @@ public class AppComponent {
 
     private void installBgpIntent() {
         FilteredConnectPoint bgpSpeaker = new FilteredConnectPoint(
-            interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.10")).connectPoint()
+            interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.12")).connectPoint()
         );
 
         log.info("BGP Speaker CP: {}",
-             interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.10")).connectPoint()
+             interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.12")).connectPoint()
         );
 
         Set<FilteredConnectPoint> wanCps = new HashSet<>();
-        FilteredConnectPoint wan1 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155014201/4"));
-        FilteredConnectPoint wan2 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000226f63cd0340/3"));
-        FilteredConnectPoint wan3 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155014202/4"));
+        FilteredConnectPoint wan1 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000031355101801/4"));
+        FilteredConnectPoint wan2 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000a68674038149/3"));
+        FilteredConnectPoint wan3 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000031355101802/4"));
         wanCps.add(wan1);
         wanCps.add(wan2);
 
@@ -185,25 +185,25 @@ public class AppComponent {
         TrafficSelector bgpIpv4SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV4)
             .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPDst(IpPrefix.valueOf("192.168.70.10/32"))
+            .matchIPDst(IpPrefix.valueOf("192.168.70.12/32"))
             .build();
 
         TrafficSelector bgpIpv4SelectorOut = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV4)
             .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPSrc(IpPrefix.valueOf("192.168.70.10/32"))
+            .matchIPSrc(IpPrefix.valueOf("192.168.70.12/32"))
             .build();
 
         TrafficSelector bgpIpv6SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV6)
             .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Dst(IpPrefix.valueOf("fd70::10/128"))
+            .matchIPv6Dst(IpPrefix.valueOf("fd70::12/128"))
             .build();
 
         TrafficSelector bgpIpv6SelectorOut = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV6)
             .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Src(IpPrefix.valueOf("fd70::10/128"))
+            .matchIPv6Src(IpPrefix.valueOf("fd70::12/128"))
             .build();
 
         MultiPointToSinglePointIntent wan2SpeakerIpv4Intent = MultiPointToSinglePointIntent.builder()
@@ -251,8 +251,8 @@ public class AppComponent {
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV4)
                 .matchIPProtocol(IPv4.PROTOCOL_TCP)
-                .matchIPSrc(IpPrefix.valueOf("192.168.70.10/32"))
-                .matchIPDst(IpPrefix.valueOf("192.168.70.11/32"))
+                .matchIPSrc(IpPrefix.valueOf("192.168.70.12/32"))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.10/32"))
                 .build()
             )
             .priority(110)
@@ -266,8 +266,8 @@ public class AppComponent {
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV4)
                 .matchIPProtocol(IPv4.PROTOCOL_TCP)
-                .matchIPSrc(IpPrefix.valueOf("192.168.70.11/32"))
-                .matchIPDst(IpPrefix.valueOf("192.168.70.10/32"))
+                .matchIPSrc(IpPrefix.valueOf("192.168.70.10/32"))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.12/32"))
                 .build()
             )
             .priority(110)
@@ -281,8 +281,8 @@ public class AppComponent {
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV6)
                 .matchIPProtocol(IPv6.PROTOCOL_TCP)
-                .matchIPv6Src(IpPrefix.valueOf("fd70::10/128"))
-                .matchIPv6Dst(IpPrefix.valueOf("fd70::11/128"))
+                .matchIPv6Src(IpPrefix.valueOf("fd70::12/128"))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::10/128"))
                 .build()
             )
             .priority(110)
@@ -296,8 +296,8 @@ public class AppComponent {
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV6)
                 .matchIPProtocol(IPv6.PROTOCOL_TCP)
-                .matchIPv6Src(IpPrefix.valueOf("fd70::11/128"))
-                .matchIPv6Dst(IpPrefix.valueOf("fd70::10/128"))
+                .matchIPv6Src(IpPrefix.valueOf("fd70::10/128"))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::12/128"))
                 .build()
             )
             .priority(110)
@@ -333,10 +333,10 @@ public class AppComponent {
         IpPrefix prefix63 = IpPrefix.valueOf("192.168.63.0/24");
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
         // My network
-        IpPrefix prefix65xx0 = IpPrefix.valueOf("172.16.10.0/24");
-        IpPrefix prefix65xx1 = IpPrefix.valueOf("172.17.10.0/24");
-        IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
-        IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+        IpPrefix prefix65xx0 = IpPrefix.valueOf("172.16.12.0/24");
+        IpPrefix prefix65xx1 = IpPrefix.valueOf("172.17.12.0/24");
+        IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:12::/64");
+        IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:112::/64");
 
         @Override
         public void process(PacketContext context) {

@@ -117,9 +117,9 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     // Table: requestIP -> ConnectPoint(devID, port)
     private Map<IpAddress, ConnectPoint> requestTable = new HashMap<>();
 
-    private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155014201");
-    private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155014202");
-    private final DeviceId ovs3 = DeviceId.deviceId("of:0000226f63cd0340");
+    private final DeviceId ovs1 = DeviceId.deviceId("of:0000031355101801");
+    private final DeviceId ovs2 = DeviceId.deviceId("of:0000031355101802");
+    private final DeviceId ovs3 = DeviceId.deviceId("of:0000a68674038149");
 
     private final ProxyNdpConfigListener cfgListener = new ProxyNdpConfigListener();
     private final ConfigFactory<ApplicationId, ProxyNdpConfig> factory = new ConfigFactory<>(
@@ -242,12 +242,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     }
 
     private class ProxyNdpProcessor implements PacketProcessor {
-        IpAddress my70 = IpAddress.valueOf("192.168.70.10");
-        IpAddress peerA70 = IpAddress.valueOf("192.168.70.11");
+        IpAddress my70 = IpAddress.valueOf("192.168.70.12");
+        IpAddress peerA70 = IpAddress.valueOf("192.168.70.10");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
-        IpAddress myFd70 = IpAddress.valueOf("fd70::10");
-        IpAddress peerAFd70 = IpAddress.valueOf("fd70::11");
+        IpAddress myFd70 = IpAddress.valueOf("fd70::12");
+        IpAddress peerAFd70 = IpAddress.valueOf("fd70::10");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
@@ -255,10 +255,10 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
         // My network
-        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
-        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
-        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
-        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.12.0/24");
+        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.12.0/24");
+        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:12::/64");
+        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:112::/64");
 
         @Override
         public void process(PacketContext context) {

@@ -187,21 +187,35 @@ public class AppComponent {
         wanCps.add(wan2);
 
         // 1) wan to speaker (ipv4)
-        TrafficSelector bgpIpv4Selector = DefaultTrafficSelector.builder()
+        TrafficSelector bgpIpv4SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV4)
             .matchIPProtocol(IPv4.PROTOCOL_TCP)
+            .matchIPDst(IpPrefix.valueOf("192.168.70.11/32"))
             .build();
 
-        TrafficSelector bgpIpv6Selector = DefaultTrafficSelector.builder()
+        TrafficSelector bgpIpv4SelectorOut = DefaultTrafficSelector.builder()
+            .matchEthType(Ethernet.TYPE_IPV4)
+            .matchIPProtocol(IPv4.PROTOCOL_TCP)
+            .matchIPSrc(IpPrefix.valueOf("192.168.70.11/32"))
+            .build();
+
+        TrafficSelector bgpIpv6SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV6)
             .matchIPProtocol(IPv6.PROTOCOL_TCP)
+            .matchIPv6Dst(IpPrefix.valueOf("fd70::11/128"))
+            .build();
+
+        TrafficSelector bgpIpv6SelectorOut = DefaultTrafficSelector.builder()
+            .matchEthType(Ethernet.TYPE_IPV6)
+            .matchIPProtocol(IPv6.PROTOCOL_TCP)
+            .matchIPv6Src(IpPrefix.valueOf("fd70::11/128"))
             .build();
 
         MultiPointToSinglePointIntent wan2SpeakerIpv4Intent = MultiPointToSinglePointIntent.builder()
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv4Selector)
+            .selector(bgpIpv4SelectorIn)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
@@ -209,7 +223,7 @@ public class AppComponent {
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv6Selector)
+            .selector(bgpIpv6SelectorIn)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
@@ -220,7 +234,7 @@ public class AppComponent {
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
             .filteredEgressPoints(wanCps)
-            .selector(bgpIpv4Selector)
+            .selector(bgpIpv4SelectorOut)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
@@ -228,7 +242,7 @@ public class AppComponent {
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
             .filteredEgressPoints(wanCps)
-            .selector(bgpIpv6Selector)
+            .selector(bgpIpv6SelectorOut)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 

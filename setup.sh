@@ -81,20 +81,20 @@ function create_topology() {
     sudo ip link set eth-h3 netns $(docker inspect -f '{{.State.Pid}}' h3)
 
     echo -e "${YELLOW}Assigning IPs inside containers...${NC}"
-    docker exec h1 ip link set dev eth-h1 address 00:00:00:88:00:02
+    docker exec h1 ip link set dev eth-h1 address 00:00:00:11:00:02
     docker exec h1 ip addr add 172.16.11.2/24 dev eth-h1
     docker exec h1 ip -6 addr add 2a0b:4e07:c4:11::2/64 dev eth-h1
-    docker exec h2 ip link set dev eth-h2 address 00:00:00:88:00:03
+    docker exec h2 ip link set dev eth-h2 address 00:00:00:11:00:03
     docker exec h2 ip addr add 172.16.11.3/24 dev eth-h2
     docker exec h2 ip -6 addr add 2a0b:4e07:c4:11::3/64 dev eth-h2
-    docker exec frr ip link set dev eth-frr address 00:00:00:88:00:69
+    docker exec frr ip link set dev eth-frr address 00:00:00:11:00:69
     docker exec frr ip addr add 172.16.11.69/24 dev eth-frr
     docker exec frr ip addr add 192.168.63.1/24 dev eth-frr
     docker exec frr ip addr add 192.168.70.11/24 dev eth-frr
     docker exec frr ip -6 addr add 2a0b:4e07:c4:11::69/64 dev eth-frr
     docker exec frr ip -6 addr add fd63::1/64 dev eth-frr
     docker exec frr ip -6 addr add fd70::11/64 dev eth-frr
-    docker exec router ip link set dev eth-r address 00:00:00:88:00:01
+    docker exec router ip link set dev eth-r address 00:00:00:11:00:01
     docker exec router ip addr add 192.168.63.2/24 dev eth-r
     docker exec router ip addr add 172.17.11.1/24 dev veth-h3
     docker exec router ip -6 addr add fd63::2/64 dev eth-r

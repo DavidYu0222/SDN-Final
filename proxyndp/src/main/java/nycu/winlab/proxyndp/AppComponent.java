@@ -244,10 +244,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     private class ProxyNdpProcessor implements PacketProcessor {
         IpAddress my70 = IpAddress.valueOf("192.168.70.12");
         IpAddress peerA70 = IpAddress.valueOf("192.168.70.10");
+        //IpAddress peerB70 = IpAddress.valueOf("192.168.70.11");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
         IpAddress myFd70 = IpAddress.valueOf("fd70::12");
         IpAddress peerAFd70 = IpAddress.valueOf("fd70::10");
+        //IpAddress peerBFd70 = IpAddress.valueOf("fd70::11");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1

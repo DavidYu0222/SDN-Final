@@ -121,6 +121,8 @@ public class AppComponent {
     private final DeviceId ovs1 = DeviceId.deviceId("of:0000011155008801");
     private final DeviceId ovs2 = DeviceId.deviceId("of:0000011155008802");
     private final DeviceId ovs3 = DeviceId.deviceId("of:0000c61549ed5941");
+    private IpAddress bgpSpeakerIpv4 = IpAddress.valueOf("192.168.70.11");
+    private IpAddress bgpSpeakerIpv6 = IpAddress.valueOf("fd70::11");
 
     @Activate
     protected void activate() {
@@ -131,11 +133,6 @@ public class AppComponent {
         // // add a packet processor to packetService
         packetService.addProcessor(processor, PacketProcessor.director(2));
 
-        // // install a flowrule for packet-in
-        // TrafficSelector.Builder selArp = DefaultTrafficSelector.builder();
-        // selArp.matchEthType(Ethernet.TYPE_ARP);
-        // packetService.requestPackets(selArp.build(), PacketPriority.REACTIVE, appId);
-
         TrafficSelector.Builder selv4 = DefaultTrafficSelector.builder();
         selv4.matchEthType(Ethernet.TYPE_IPV4);
         packetService.requestPackets(selv4.build(), PacketPriority.REACTIVE, appId);
@@ -145,6 +142,10 @@ public class AppComponent {
         packetService.requestPackets(selv6.build(), PacketPriority.REACTIVE, appId);
 
         installBgpIntent();
+        FilteredConnectPoint peerA = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008802/4"));
+        FilteredConnectPoint peerB = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008802/5"));
+        installPeerIntent(peerA, IpPrefix.valueOf("192.168.70.10/32"), IpPrefix.valueOf("fd70::10/128"));
+        //installPeerIntent(peerB, IpPrefix.valueOf("192.168.70.12/32"), IpPrefix.valueOf("fd70::12/128"));
 
         log.info("Started");
     }
@@ -172,43 +173,39 @@ public class AppComponent {
 
     private void installBgpIntent() {
         FilteredConnectPoint bgpSpeaker = new FilteredConnectPoint(
-            interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.11")).connectPoint()
+            interfaceService.getMatchingInterface(bgpSpeakerIpv4).connectPoint()
         );
 
-        log.info("BGP Speaker CP: {}",
-             interfaceService.getMatchingInterface(IpAddress.valueOf("192.168.70.11")).connectPoint()
-        );
+        log.info("BGP Speaker CP: {}", bgpSpeaker);
 
         Set<FilteredConnectPoint> wanCps = new HashSet<>();
         FilteredConnectPoint wan1 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008801/4"));
         FilteredConnectPoint wan2 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000c61549ed5941/3"));
-        FilteredConnectPoint wan3 = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008802/4"));
         wanCps.add(wan1);
         wanCps.add(wan2);
 
-        // 1) wan to speaker (ipv4)
         TrafficSelector bgpIpv4SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV4)
             .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPDst(IpPrefix.valueOf("192.168.70.11/32"))
+            .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
             .build();
 
         TrafficSelector bgpIpv4SelectorOut = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV4)
             .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPSrc(IpPrefix.valueOf("192.168.70.11/32"))
+            .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
             .build();
 
         TrafficSelector bgpIpv6SelectorIn = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV6)
             .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Dst(IpPrefix.valueOf("fd70::11/128"))
+            .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
             .build();
 
         TrafficSelector bgpIpv6SelectorOut = DefaultTrafficSelector.builder()
             .matchEthType(Ethernet.TYPE_IPV6)
             .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Src(IpPrefix.valueOf("fd70::11/128"))
+            .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
             .build();
 
         MultiPointToSinglePointIntent wan2SpeakerIpv4Intent = MultiPointToSinglePointIntent.builder()
@@ -248,70 +245,78 @@ public class AppComponent {
 
         intentService.submit(speaker2WanIpv4Intent);
         intentService.submit(speaker2WanIpv6Intent);
+    }
 
-        PointToPointIntent wan3Ipv4Intent1 = PointToPointIntent.builder()
+    private void installPeerIntent(FilteredConnectPoint peerCP, IpPrefix peerIpv4, IpPrefix peerIpv6) {
+        FilteredConnectPoint bgpSpeaker = new FilteredConnectPoint(
+            interfaceService.getMatchingInterface(bgpSpeakerIpv4).connectPoint()
+        );
+
+        log.info("BGP Speaker CP: {}", bgpSpeaker);
+
+        PointToPointIntent peerIpv4IntentOut = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)   // ingress
-            .filteredEgressPoint(wan3)          // egress
+            .filteredEgressPoint(peerCP)          // egress
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV4)
                 .matchIPProtocol(IPv4.PROTOCOL_TCP)
-                .matchIPSrc(IpPrefix.valueOf("192.168.70.11/32"))
-                .matchIPDst(IpPrefix.valueOf("192.168.70.10/32"))
+                .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .matchIPDst(peerIpv4)
                 .build()
             )
             .priority(110)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        PointToPointIntent wan3Ipv4Intent2 = PointToPointIntent.builder()
+        PointToPointIntent peerIpv4IntentIn = PointToPointIntent.builder()
             .appId(appId)
-            .filteredIngressPoint(wan3)         // ingress
+            .filteredIngressPoint(peerCP)         // ingress
             .filteredEgressPoint(bgpSpeaker)    // egress
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV4)
                 .matchIPProtocol(IPv4.PROTOCOL_TCP)
-                .matchIPSrc(IpPrefix.valueOf("192.168.70.10/32"))
-                .matchIPDst(IpPrefix.valueOf("192.168.70.11/32"))
+                .matchIPSrc(peerIpv4)
+                .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
                 .build()
             )
             .priority(110)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        PointToPointIntent wan3Ipv6Intent1 = PointToPointIntent.builder()
+        PointToPointIntent peerIpv6IntentOut = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)   // ingress
-            .filteredEgressPoint(wan3)          // egress
+            .filteredEgressPoint(peerCP)          // egress
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV6)
                 .matchIPProtocol(IPv6.PROTOCOL_TCP)
-                .matchIPv6Src(IpPrefix.valueOf("fd70::11/128"))
-                .matchIPv6Dst(IpPrefix.valueOf("fd70::10/128"))
+                .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .matchIPv6Dst(peerIpv6)
                 .build()
             )
             .priority(110)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        PointToPointIntent wan3Ipv6Intent2 = PointToPointIntent.builder()
+        PointToPointIntent peerIpv6IntentIn = PointToPointIntent.builder()
             .appId(appId)
-            .filteredIngressPoint(wan3)         // ingress
+            .filteredIngressPoint(peerCP)         // ingress
             .filteredEgressPoint(bgpSpeaker)    // egress
             .selector(DefaultTrafficSelector.builder()
                 .matchEthType(Ethernet.TYPE_IPV6)
                 .matchIPProtocol(IPv6.PROTOCOL_TCP)
-                .matchIPv6Src(IpPrefix.valueOf("fd70::10/128"))
-                .matchIPv6Dst(IpPrefix.valueOf("fd70::11/128"))
+                .matchIPv6Src(peerIpv6)
+                .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
                 .build()
             )
             .priority(110)
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
-        intentService.submit(wan3Ipv4Intent1);
-        intentService.submit(wan3Ipv4Intent2);
-        intentService.submit(wan3Ipv6Intent1);
-        intentService.submit(wan3Ipv6Intent2);
+        intentService.submit(peerIpv4IntentOut);
+        intentService.submit(peerIpv4IntentIn);
+        intentService.submit(peerIpv6IntentOut);
+        intentService.submit(peerIpv6IntentIn);
     }
 
     // private class VRouterConfigListener implements NetworkConfigListener {

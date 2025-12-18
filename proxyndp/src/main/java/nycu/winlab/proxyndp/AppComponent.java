@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.nio.ByteBuffer;
-import java.util.Optional;
+// import java.util.Optional;
 
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
@@ -44,7 +44,7 @@ import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.TrafficSelector;
 
 import org.onosproject.net.flow.DefaultTrafficTreatment;
-// import org.onosproject.net.flow.TrafficTreatment;
+import org.onosproject.net.flow.TrafficTreatment;
 
 import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
@@ -58,6 +58,7 @@ import org.onosproject.net.packet.PacketService;
 import org.onosproject.net.packet.PacketProcessor;
 import org.onosproject.net.packet.PacketContext;
 import org.onosproject.net.packet.InboundPacket;
+import org.onosproject.net.packet.OutboundPacket;
 import org.onosproject.net.packet.DefaultOutboundPacket;
 
 import org.onosproject.net.provider.ProviderId;
@@ -244,10 +245,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     private class ProxyNdpProcessor implements PacketProcessor {
         IpAddress my70 = IpAddress.valueOf("192.168.70.10");
         IpAddress peerA70 = IpAddress.valueOf("192.168.70.11");
+        IpAddress peerB70 = IpAddress.valueOf("192.168.70.12");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
         IpAddress myFd70 = IpAddress.valueOf("fd70::10");
         IpAddress peerAFd70 = IpAddress.valueOf("fd70::11");
+        IpAddress peerBFd70 = IpAddress.valueOf("fd70::12");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
@@ -259,6 +262,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
         IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
         IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+
+        ConnectPoint excludePort = ConnectPoint.deviceConnectPoint("of:0000011155014202/5"); // prevent loop in L2
 
         @Override
         public void process(PacketContext context) {
@@ -302,7 +307,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 }
 
                 // Firewall whitelist
-                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) &&
+                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) && !dstIp.equals(peerB70) &&
                     !prefix63.contains(dstIp) && !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
@@ -312,7 +317,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 if (arp.getOpCode() == ARP.OP_REQUEST) {
                     if (ipMacTable.get(dstIp) == null) {
                         // Flood ARP Request to edge port
-                        flood(context, ethPkt);
+                        flood(context, ethPkt, new ConnectPoint(recDevId, recPort), excludePort);
                         requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
                         log.info("ARP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                     } else {
@@ -367,7 +372,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
-                            !prefixFd63.contains(dstIp) &&
+                            !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
                             context.block();
@@ -376,7 +381,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         if (ipMacTable.get(dstIp) == null) {
                             // Flood NDP NS to edge port
-                            flood(context, ethPkt);
+                            flood(context, ethPkt, new ConnectPoint(recDevId, recPort), excludePort);
                             requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
                             log.info("NDP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                         } else {
@@ -414,7 +419,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
-                            !prefixFd63.contains(dstIp) &&
+                            !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
@@ -447,14 +452,37 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         );
     }
 
-    private void flood(PacketContext context, Ethernet ethPkt) {
+    // private void flood(PacketContext context, Ethernet ethPkt) {
+    //     // Serialize the ARP packet
+    //     ByteBuffer data = ByteBuffer.wrap(ethPkt.serialize());
+
+    //     // Emit packet to all edge ports
+    //     edgePortService.emitPacket(
+    //         data,
+    //         Optional.of(DefaultTrafficTreatment.emptyTreatment())
+    //     );
+    // }
+
+    private void flood(PacketContext context, Ethernet ethPkt, ConnectPoint recvPort, ConnectPoint excludePort) {
         // Serialize the ARP packet
         ByteBuffer data = ByteBuffer.wrap(ethPkt.serialize());
 
-        // Emit packet to all edge ports
-        edgePortService.emitPacket(
-            data,
-            Optional.of(DefaultTrafficTreatment.emptyTreatment())
-        );
+        for (ConnectPoint point : edgePortService.getEdgePoints()) {
+            if (point.equals(excludePort) || point.equals(recvPort)) {
+                continue;
+            }
+
+            TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                    .setOutput(point.port())
+                    .build();
+
+            OutboundPacket packet = new DefaultOutboundPacket(
+                    point.deviceId(),
+                    treatment,
+                    data
+            );
+
+            packetService.emit(packet);
+        }
     }
 }

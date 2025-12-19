@@ -244,12 +244,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     private class ProxyNdpProcessor implements PacketProcessor {
         IpAddress my70 = IpAddress.valueOf("192.168.70.12");
         IpAddress peerA70 = IpAddress.valueOf("192.168.70.10");
-        //IpAddress peerB70 = IpAddress.valueOf("192.168.70.11");
+        IpAddress peerB70 = IpAddress.valueOf("192.168.70.11");
         IpAddress ixp70 = IpAddress.valueOf("192.168.70.253");
 
         IpAddress myFd70 = IpAddress.valueOf("fd70::12");
         IpAddress peerAFd70 = IpAddress.valueOf("fd70::10");
-        //IpAddress peerBFd70 = IpAddress.valueOf("fd70::11");
+        IpAddress peerBFd70 = IpAddress.valueOf("fd70::11");
         IpAddress ixpFd70 = IpAddress.valueOf("fd70::fe");
 
         // 63 only exist in ovs1
@@ -304,7 +304,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 }
 
                 // Firewall whitelist
-                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) &&
+                if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) && !dstIp.equals(peerB70) &&
                     !prefix63.contains(dstIp) && !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
@@ -369,7 +369,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
-                            !prefixFd63.contains(dstIp) &&
+                            !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
                             context.block();
@@ -416,7 +416,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
-                            !prefixFd63.contains(dstIp) &&
+                            !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();

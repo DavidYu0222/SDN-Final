@@ -412,8 +412,8 @@ public class AppComponent {
             }
 
             // Intra to Inter
+            log.info("[Routing] SrcIp: {}, DstIp: {}", srcIp, dstIp);
             if (vrouterMac.equals(dstMac)) {
-                log.info("[Routing] SrcIp: {}, DstIp: {}", srcIp, dstIp);
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
@@ -435,7 +435,7 @@ public class AppComponent {
                     }
                     log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
 
-                    installPath(recvCp, nextHopCp, context, dstMac, nextHopMac); // dstMac = vrouterMac
+                    installPath(recvCp, nextHopCp, context, nextHopMac);
 
                     // Emit packet
                     ethPkt.setSourceMACAddress(dstMac);
@@ -468,7 +468,7 @@ public class AppComponent {
                 }
                 log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
 
-                installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac);
+                installPath(recvCp, nextHopCp, context, nextHopMac);
 
                 // Emit packet
                 ethPkt.setSourceMACAddress(vrouterMac);
@@ -478,8 +478,27 @@ public class AppComponent {
                     DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
                     ByteBuffer.wrap(ethPkt.serialize())
                 ));
+            // AS65xx1 to inter
+            } else if (prefix65xx1.contains(srcIp) || prefix65xx1v6.contains(srcIp)) {
+                IpAddress defaultIp = IpAddress.valueOf("192.168.70.253");
+                MacAddress nextHopMac = interfaceService.getMatchingInterface(defaultIp).mac();
+                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
+
+                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(defaultIp).connectPoint();
+                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+
+                installPath(recvCp, nextHopCp, context, nextHopMac);
+
+                // Emit packet
+                ethPkt.setSourceMACAddress(vrouterMac);
+                ethPkt.setDestinationMACAddress(nextHopMac);
+                packetService.emit(new DefaultOutboundPacket(
+                    nextHopCp.deviceId(),
+                    DefaultTrafficTreatment.builder().setOutput(nextHopCp.port()).build(),
+                    ByteBuffer.wrap(ethPkt.serialize())
+                ));
+            // Transit Traffic
             } else {
-                log.info("[Routing] SrcIp: {}, DstIp: {}", srcIp, dstIp);
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
@@ -501,7 +520,7 @@ public class AppComponent {
                     }
                     log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
 
-                    installPath(recvCp, nextHopCp, context, vrouterMac, nextHopMac); // dstMac = vrouterMac
+                    installPath(recvCp, nextHopCp, context, nextHopMac); // dstMac = vrouterMac
 
                     // Emit packet
                     ethPkt.setSourceMACAddress(vrouterMac);
@@ -525,7 +544,7 @@ public class AppComponent {
     private final List<DeviceId> switchOrder = Arrays.asList(ovs1, ovs2, ovs3);
 
     private void installPath(ConnectPoint recvCp, ConnectPoint nextHopCp,
-                             PacketContext context, MacAddress curHopMac, MacAddress nextHopMac) {
+                             PacketContext context, MacAddress nextHopMac) {
         // Parse the packet
         Ethernet ethPkt = (Ethernet) context.inPacket().parsed();
 
@@ -572,7 +591,7 @@ public class AppComponent {
 
 
             TrafficTreatment treatment = DefaultTrafficTreatment.builder()
-                    .setEthSrc(curHopMac)
+                    .setEthSrc(vrouterMac)
                     .setEthDst(nextHopMac)
                     .setOutput(nextHopCp.port())
                     .build();
@@ -607,7 +626,7 @@ public class AppComponent {
             }
 
             TrafficTreatment firstTreatment = DefaultTrafficTreatment.builder()
-                    .setEthSrc(curHopMac)
+                    .setEthSrc(vrouterMac)
                     .setEthDst(nextHopMac)
                     .setOutput(firstOutPort)
                     .build();
@@ -633,7 +652,7 @@ public class AppComponent {
                 }
 
                 TrafficSelector.Builder selector = DefaultTrafficSelector.builder()
-                        .matchEthSrc(curHopMac)
+                        .matchEthSrc(vrouterMac)
                         .matchEthDst(nextHopMac)
                         .matchEthType(ethType);
                 if (ethType == Ethernet.TYPE_IPV4) {
@@ -661,7 +680,7 @@ public class AppComponent {
             DeviceId curr = path.get(path.size() - 1);
 
             TrafficSelector.Builder selector = DefaultTrafficSelector.builder()
-                    .matchEthSrc(curHopMac)
+                    .matchEthSrc(vrouterMac)
                     .matchEthDst(nextHopMac)
                     .matchEthType(ethType);
             if (ethType == Ethernet.TYPE_IPV4) {

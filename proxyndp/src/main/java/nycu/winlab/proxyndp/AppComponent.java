@@ -263,7 +263,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
         IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
 
-        ConnectPoint excludePort = ConnectPoint.deviceConnectPoint("of:0000011155014202/5"); // prevent loop in L2
+        ConnectPoint excludeCP = ConnectPoint.deviceConnectPoint("of:0000011155014202/5"); // prevent loop in L2
 
         @Override
         public void process(PacketContext context) {
@@ -276,6 +276,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
             Ethernet ethPkt = inPkt.parsed();
             DeviceId recDevId = inPkt.receivedFrom().deviceId();
             PortNumber recPort = inPkt.receivedFrom().port();
+            ConnectPoint recCP = new ConnectPoint(recDevId, recPort);
             VlanId vlan = VlanId.vlanId(ethPkt.getVlanID()); // Get VLAN for Host learning
 
             if (ethPkt == null) {
@@ -294,6 +295,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 // Block 192.168.63.0/24 from outside
                 if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
                     log.info("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
+                    context.block();
+                    return; // don't flood, don't handle this ARP
+                }
+
+                if (recCP.equals(excludeCP)) {
+                    log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp, dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -317,8 +324,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 if (arp.getOpCode() == ARP.OP_REQUEST) {
                     if (ipMacTable.get(dstIp) == null) {
                         // Flood ARP Request to edge port
-                        flood(context, ethPkt, new ConnectPoint(recDevId, recPort), excludePort);
-                        requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
+                        flood(context, ethPkt, recCP, excludeCP);
+                        requestTable.put(srcIp, recCP);
                         log.info("ARP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                     } else {
                         // Send ARP Reply to the requester
@@ -358,6 +365,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             return; // don't flood, don't handle this IPv6
                         }
 
+                        if (recCP.equals(excludeCP)) {
+                            log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp63, dstIp63);
+                            context.block();
+                            return; // don't flood, don't handle this ARP
+                        }
+
                         // [CHANGE] Learn host info immediately from incoming IPv6 packet
                         learnHost(srcIp, srcMac, vlan, recDevId, recPort);
 
@@ -381,8 +394,8 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                         if (ipMacTable.get(dstIp) == null) {
                             // Flood NDP NS to edge port
-                            flood(context, ethPkt, new ConnectPoint(recDevId, recPort), excludePort);
-                            requestTable.put(srcIp, new ConnectPoint(recDevId, recPort));
+                            flood(context, ethPkt, recCP, excludeCP);
+                            requestTable.put(srcIp, recCP);
                             log.info("NDP TABLE MISS. {} -> {}, Flood", srcIp, dstIp);
                         } else {
                             // Send NDP NA to the requester
@@ -405,6 +418,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
                             context.block();
                             return; // don't flood, don't handle this IPv6
+                        }
+
+                        if (recCP.equals(excludeCP)) {
+                            log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp63, dstIp63);
+                            context.block();
+                            return; // don't flood, don't handle this ARP
                         }
 
                         // [CHANGE] Learn host info immediately from incoming IPv6 packet
@@ -463,12 +482,12 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
     //     );
     // }
 
-    private void flood(PacketContext context, Ethernet ethPkt, ConnectPoint recvPort, ConnectPoint excludePort) {
+    private void flood(PacketContext context, Ethernet ethPkt, ConnectPoint recvPort, ConnectPoint excludeCP) {
         // Serialize the ARP packet
         ByteBuffer data = ByteBuffer.wrap(ethPkt.serialize());
 
         for (ConnectPoint point : edgePortService.getEdgePoints()) {
-            if (point.equals(excludePort) || point.equals(recvPort)) {
+            if (point.equals(excludeCP) || point.equals(recvPort)) {
                 continue;
             }
 

@@ -258,10 +258,10 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
         IpPrefix prefixFd63 = IpPrefix.valueOf("fd63::/64");
 
         // My network
-        IpPrefix prefix65100 = IpPrefix.valueOf("172.16.10.0/24");
-        IpPrefix prefix65101 = IpPrefix.valueOf("172.17.10.0/24");
-        IpPrefix prefix65100v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
-        IpPrefix prefix65101v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
+        IpPrefix prefix65xx0 = IpPrefix.valueOf("172.16.10.0/24");
+        IpPrefix prefix65xx1 = IpPrefix.valueOf("172.17.10.0/24");
+        IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
+        IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
 
         ConnectPoint excludeCP = ConnectPoint.deviceConnectPoint("of:0000011155014202/5"); // prevent loop in L2
 
@@ -315,7 +315,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                 // Firewall whitelist
                 if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) && !dstIp.equals(peerB70) &&
-                    !prefix63.contains(dstIp) && !prefix65100.contains(dstIp) && !prefix65101.contains(dstIp)) {
+                    !prefix63.contains(dstIp) && !prefix65xx0.contains(dstIp) && !prefix65xx1.contains(dstIp)) {
                     //log.info("Skip flood for ARP: {}", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
@@ -386,7 +386,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
                             !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
-                            !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
+                            !prefix65xx0v6.contains(dstIp) && !prefix65xx1v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
@@ -439,7 +439,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
                             !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
-                            !prefix65100v6.contains(dstIp) && !prefix65101v6.contains(dstIp)) {
+                            !prefix65xx0v6.contains(dstIp) && !prefix65xx1v6.contains(dstIp)) {
                             //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP

@@ -63,7 +63,7 @@ function create_topology() {
     sudo ovs-vsctl add-port ovs1 veth-r || true
     sudo ovs-vsctl add-port ovs2 TO_TA_VXLAN -- set interface TO_TA_VXLAN type=vxlan options:remote_ip=192.168.60.11
     sudo ovs-vsctl add-port ovs2 TO_10_VXLAN -- set interface TO_10_VXLAN type=vxlan options:remote_ip=192.168.61.10 options:key=222
-    #sudo ovs-vsctl add-port ovs2 TO_12_VXLAN -- set interface TO_12_VXLAN type=vxlan options:remote_ip=192.168.61.12 options:key=222
+    sudo ovs-vsctl add-port ovs2 TO_12_VXLAN -- set interface TO_12_VXLAN type=vxlan options:remote_ip=192.168.61.12 options:key=222
 
     echo -e "${YELLOW}Setting veths up...${NC}"
     sudo ip link set veth-h1 up

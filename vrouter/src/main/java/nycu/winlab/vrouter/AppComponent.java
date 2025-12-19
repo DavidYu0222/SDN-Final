@@ -145,7 +145,7 @@ public class AppComponent {
         FilteredConnectPoint peerA = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008802/4"));
         FilteredConnectPoint peerB = new FilteredConnectPoint(ConnectPoint.deviceConnectPoint("of:0000011155008802/5"));
         installPeerIntent(peerA, IpPrefix.valueOf("192.168.70.10/32"), IpPrefix.valueOf("fd70::10/128"));
-        //installPeerIntent(peerB, IpPrefix.valueOf("192.168.70.12/32"), IpPrefix.valueOf("fd70::12/128"));
+        installPeerIntent(peerB, IpPrefix.valueOf("192.168.70.12/32"), IpPrefix.valueOf("fd70::12/128"));
 
         log.info("Started");
     }

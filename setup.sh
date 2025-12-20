@@ -55,8 +55,8 @@ function create_topology() {
     sudo ip link add veth-h3 mtu 1360 type veth peer name eth-h3 mtu 1360 || true
 
     echo -e "${YELLOW}Connecting veths to OVS...${NC}"
-    sudo ovs-vsctl add-port ovs1 veth-h1 || true
-    sudo ovs-vsctl add-port ovs2 veth-h2 || true
+    sudo ovs-vsctl add-port ovs2 veth-h1 || true
+    sudo ovs-vsctl add-port ovs1 veth-h2 || true
     sudo ovs-vsctl add-port ovs1 veth-ovs1 || true
     sudo ovs-vsctl add-port ovs2 veth-ovs2 || true
     sudo ovs-vsctl add-port ovs1 veth-frr || true
@@ -181,7 +181,7 @@ function install_proxyndp_app() {
 
     echo -e "${GREEN}proxyndp-app is ACTIVE!${NC}"
 
-    sleep 4
+    sleep 6
     echo -e "${GREEN}Pass config using netcfg.${NC}"
     onos-netcfg localhost ./config/proxyndp.json
     onos-netcfg localhost ./config/WANConnectPoint.json

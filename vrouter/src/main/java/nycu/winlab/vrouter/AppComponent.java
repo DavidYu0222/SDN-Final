@@ -69,8 +69,9 @@ import org.onosproject.net.FilteredConnectPoint;
 import org.onosproject.net.intent.IntentService;
 import org.onosproject.net.intent.PointToPointIntent;
 import org.onosproject.net.intent.MultiPointToSinglePointIntent;
-import org.onosproject.net.intent.SinglePointToMultiPointIntent;
+//import org.onosproject.net.intent.SinglePointToMultiPointIntent;
 
+import org.onosproject.net.intf.Interface;
 import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.routeservice.RouteService;
 import org.onosproject.routeservice.ResolvedRoute;
@@ -184,35 +185,16 @@ public class AppComponent {
         wanCps.add(wan1);
         wanCps.add(wan2);
 
-        TrafficSelector bgpIpv4SelectorIn = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV4)
-            .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
-            .build();
-
-        TrafficSelector bgpIpv4SelectorOut = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV4)
-            .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
-            .build();
-
-        TrafficSelector bgpIpv6SelectorIn = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV6)
-            .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
-            .build();
-
-        TrafficSelector bgpIpv6SelectorOut = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV6)
-            .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
-            .build();
-
         MultiPointToSinglePointIntent wan2SpeakerIpv4Intent = MultiPointToSinglePointIntent.builder()
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv4SelectorIn)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
@@ -220,31 +202,78 @@ public class AppComponent {
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv6SelectorIn)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
         intentService.submit(wan2SpeakerIpv4Intent);
         intentService.submit(wan2SpeakerIpv6Intent);
 
-        SinglePointToMultiPointIntent speaker2WanIpv4Intent = SinglePointToMultiPointIntent.builder()
+        PointToPointIntent speaker2Wan1Ipv4Intent = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
-            .filteredEgressPoints(wanCps)
-            .selector(bgpIpv4SelectorOut)
+            .filteredEgressPoint(wan1)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .matchIPDst(IpPrefix.valueOf("192.168.63.2/32"))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        SinglePointToMultiPointIntent speaker2WanIpv6Intent = SinglePointToMultiPointIntent.builder()
+        PointToPointIntent speaker2Wan2Ipv4Intent = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
-            .filteredEgressPoints(wanCps)
-            .selector(bgpIpv6SelectorOut)
+            .filteredEgressPoint(wan2)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.253/32"))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        intentService.submit(speaker2WanIpv4Intent);
-        intentService.submit(speaker2WanIpv6Intent);
+        PointToPointIntent speaker2Wan1Ipv6Intent = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)
+            .filteredEgressPoint(wan1)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .matchIPv6Dst(IpPrefix.valueOf("fd63::2/128"))
+                .build()
+            )
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        PointToPointIntent speaker2Wan2Ipv6Intent = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)
+            .filteredEgressPoint(wan2)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::fe/128"))
+                .build()
+            )
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        intentService.submit(speaker2Wan1Ipv4Intent);
+        intentService.submit(speaker2Wan2Ipv4Intent);
+        intentService.submit(speaker2Wan1Ipv6Intent);
+        intentService.submit(speaker2Wan2Ipv6Intent);
     }
 
     private void installPeerIntent(FilteredConnectPoint peerCP, IpPrefix peerIpv4, IpPrefix peerIpv6) {
@@ -348,10 +377,12 @@ public class AppComponent {
         IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:10::/64");
         IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:110::/64");
 
+        IpAddress defaultGateway = IpAddress.valueOf("192.168.70.253");
+        IpAddress anycastIpv4 = IpAddress.valueOf("172.16.10.80");
+        IpAddress anycastIpv6 = IpAddress.valueOf("2a0b:4e07:c4:10::80");
+
         @Override
         public void process(PacketContext context) {
-            // Stop processing if the packet has been handled, since we
-            // can't do any more to it.
             if (context.isHandled()) {
                 return;
             }
@@ -414,27 +445,21 @@ public class AppComponent {
             // Intra to Inter
             log.info("[Routing] SrcIp: {}, DstIp: {}", srcIp, dstIp);
             if (vrouterMac.equals(dstMac)) {
-                // log.info("Case1");
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
                     IpAddress nextHopIp = route.nextHop();
                     log.info("[Routing] Next Hop IP: {}", nextHopIp);
-                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
-                    if (nextHopMac == null) {
-                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
-                        context.block();
-                        return;
+                    Interface nextHopInterface = interfaceService.getMatchingInterface(nextHopIp);
+                    if (nextHopInterface == null) {
+                        log.warn("[Routing] Next Hop Interface Loss: {} -> send to default gateway", nextHopIp);
+                        nextHopInterface = interfaceService.getMatchingInterface(defaultGateway);
+                        // context.block();
+                        // return;
                     }
-                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
-
-                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
-                    if (nextHopCp == null) {
-                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
-                        context.block();
-                        return;
-                    }
-                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                    MacAddress nextHopMac = nextHopInterface.mac();
+                    ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                    log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", nextHopIp, nextHopMac);
 
                     installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -453,22 +478,34 @@ public class AppComponent {
                 }
             // Any to Intra
             } else if (prefix65xx0.contains(dstIp) || prefix65xx0v6.contains(dstIp)) {
-                // log.info("Case2");
-                MacAddress nextHopMac = interfaceService.getMatchingInterface(dstIp).mac();
-                if (nextHopMac == null) {
-                    log.warn("[Routing] Next Hop Mac Loss: {}", dstIp);
-                    context.block();
-                    return;
+                Interface nextHopInterface = null;
+                if (anycastIpv4.equals(dstIp) || anycastIpv6.equals(dstIp)) {
+                    Set<Interface> anycastInterfaces = interfaceService.getInterfacesByIp(dstIp);
+                    if (recDevId.equals(ovs1)) {
+                        // If we are at OVS1, strictly pick the interface attached to OVS1
+                        nextHopInterface = anycastInterfaces.stream()
+                            .filter(intf -> intf.connectPoint().deviceId().equals(ovs1))
+                            .findFirst()
+                            .orElse(null);
+                    } else {
+                        // If we are at OVS2, strictly pick the interface attached to OVS2
+                        nextHopInterface = anycastInterfaces.stream()
+                            .filter(intf -> intf.connectPoint().deviceId().equals(ovs2))
+                            .findFirst()
+                            .orElse(null);
+                    }
+                } else {
+                    nextHopInterface = interfaceService.getMatchingInterface(dstIp);
                 }
-                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
 
-                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(dstIp).connectPoint();
-                if (nextHopCp == null) {
-                    log.warn("[Routing] Next Hop Cp Loss: {}", dstIp);
+                if (nextHopInterface == null) {
+                    log.warn("[Routing] Next Hop Interface Loss: {}", dstIp);
                     context.block();
                     return;
                 }
-                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                MacAddress nextHopMac = nextHopInterface.mac();
+                ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", dstIp, nextHopMac);
 
                 installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -482,13 +519,9 @@ public class AppComponent {
                 ));
             // AS65xx1 to inter
             } else if (prefix65xx1.contains(srcIp) || prefix65xx1v6.contains(srcIp)) {
-                // log.info("Case3");
-                IpAddress defaultIp = IpAddress.valueOf("192.168.70.253");
-                MacAddress nextHopMac = interfaceService.getMatchingInterface(defaultIp).mac();
-                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
-
-                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(defaultIp).connectPoint();
-                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                MacAddress nextHopMac = interfaceService.getMatchingInterface(defaultGateway).mac();
+                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(defaultGateway).connectPoint();
+                log.info("[Routing] ROUTE FOUND → next-hop = {} {}", dstIp, nextHopMac);
 
                 installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -502,27 +535,19 @@ public class AppComponent {
                 ));
             // Transit Traffic
             } else {
-                // log.info("Case4");
                 Optional<ResolvedRoute> resolvedRoute = routeService.longestPrefixLookup(dstIp);
                 if (resolvedRoute.isPresent()) {
                     ResolvedRoute route = resolvedRoute.get();
                     IpAddress nextHopIp = route.nextHop();
                     log.info("[Routing] Next Hop IP: {}", nextHopIp);
-                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
-                    if (nextHopMac == null) {
-                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
+                    Interface nextHopInterface = interfaceService.getMatchingInterface(nextHopIp);
+                    if (nextHopInterface == null) {
                         context.block();
                         return;
                     }
-                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
-
-                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
-                    if (nextHopCp == null) {
-                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
-                        context.block();
-                        return;
-                    }
-                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                    MacAddress nextHopMac = nextHopInterface.mac();
+                    ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                    log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", nextHopIp, nextHopMac);
 
                     installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -577,7 +602,7 @@ public class AppComponent {
         // Get path
         List<DeviceId> path = getPath(startDevice, endDevice);
         if (path == null || path.isEmpty()) {
-            log.info("DEBUG: NO PATH");
+            log.info("[DEBUG] NO PATH");
             return;
         }
 

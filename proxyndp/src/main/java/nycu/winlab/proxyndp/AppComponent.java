@@ -46,6 +46,10 @@ import org.onosproject.net.flow.TrafficSelector;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.TrafficTreatment;
 
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.FlowRule;
+
 import org.onosproject.net.ConnectPoint;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.Host;
@@ -97,6 +101,9 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected PacketService packetService;
+
+    @Reference(cardinality = ReferenceCardinality.MANDATORY)
+    protected FlowRuleService flowRuleService;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected EdgePortService edgePortService;
@@ -235,6 +242,11 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                     ipMacTable.put(vrouterIpv4, vrouterMac);
                     ipMacTable.put(vrouterIpv6, vrouterMac);
+                    ipMacTable.put(IpAddress.valueOf("192.168.70.11"), MacAddress.valueOf("00:00:00:11:00:69"));
+                    ipMacTable.put(IpAddress.valueOf("fd70::11"), MacAddress.valueOf("00:00:00:11:00:69"));
+                    ipMacTable.put(IpAddress.valueOf("192.168.70.12"), MacAddress.valueOf("00:00:00:12:00:69"));
+                    ipMacTable.put(IpAddress.valueOf("fd70::12"), MacAddress.valueOf("00:00:00:12:00:69"));
+
                     log.info("Insert vrouter to table. Ipv4 = {}, Ipv6 = {}, MAC = {}",
                     config.getVrouterIpv4(), config.getVrouterIpv6(), config.getVrouterMac());
                 }
@@ -294,13 +306,14 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                 // Block 192.168.63.0/24 from outside
                 if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
-                    log.info("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
+                    log.warn("[DEBUG] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recDevId);
+                    installDropRule(recDevId, srcIp, dstIp, 0);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
 
                 if (recCP.equals(excludeCP)) {
-                    log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp, dstIp);
+                    log.warn("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp, dstIp, recCP);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -316,7 +329,7 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 // Firewall whitelist
                 if (!dstIp.equals(my70) && !dstIp.equals(ixp70) && !dstIp.equals(peerA70) && !dstIp.equals(peerB70) &&
                     !prefix63.contains(dstIp) && !prefix65xx0.contains(dstIp) && !prefix65xx1.contains(dstIp)) {
-                    //log.info("Skip flood for ARP: {}", dstIp);
+                    //log.warn("Skip flood for ARP: {}", dstIp);
                     context.block();
                     return; // don't flood, don't handle this ARP
                 }
@@ -356,17 +369,20 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
 
                     // Handle NDP (A -> B) Neighbor Solicitation
                     if (icmpType == ICMP6.NEIGHBOR_SOLICITATION) {
+                        // Get Taget IP from NS
+                        NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
+                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
+
                         // Block fd63::/64 from outside
-                        IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-                        IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
-                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                        if ((prefixFd63.contains(srcIp) || prefixFd63.contains(dstIp)) && !recDevId.equals(ovs1)) {
+                            log.warn("[DEBUG] Skip process for NS: {} -> {} on {}", srcIp, dstIp, recDevId);
+                            installDropRule(recDevId, srcIp, dstIp, 1);
                             context.block();
                             return; // don't flood, don't handle this IPv6
                         }
 
                         if (recCP.equals(excludeCP)) {
-                            log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp63, dstIp63);
+                            log.warn("[LOOP] Skip process for NS: {} -> {} on {}", srcIp, dstIp, recCP);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
@@ -379,15 +395,11 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                             ipMacTable.put(srcIp, srcMac);
                         }
 
-                        // Get Taget IP from NS
-                        NeighborSolicitation ns = (NeighborSolicitation) icmp6.getPayload();
-                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ns.getTargetAddress());
-
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
                             !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65xx0v6.contains(dstIp) && !prefix65xx1v6.contains(dstIp)) {
-                            //log.info("[DEBUG] Skip flood for NS: {}", dstIp);
+                            //log.warn("[DEBUG] Skip flood for NS: {} -> {}", srcIp, dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
@@ -411,17 +423,18 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         context.block();
                         return;
                     } else if (icmpType == ICMP6.NEIGHBOR_ADVERTISEMENT) {
+                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+
                         // Block fd63::/64 from outside
-                        IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-                        IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                        if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
-                            log.info("[DEBUG] Skip process for ICMP6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
+                        if ((prefixFd63.contains(srcIp) || prefixFd63.contains(dstIp)) && !recDevId.equals(ovs1)) {
+                            log.warn("[DEBUG] Skip process for NA: {} -> {} on {}", srcIp, dstIp, recDevId);
+                            installDropRule(recDevId, srcIp, dstIp, 2);
                             context.block();
                             return; // don't flood, don't handle this IPv6
                         }
 
                         if (recCP.equals(excludeCP)) {
-                            log.info("[LOOP] Skip process for ARP: {} -> {} on {}", srcIp63, dstIp63);
+                            log.warn("[LOOP] Skip process for NA: {} -> {} on {}", srcIp, dstIp, recCP);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
@@ -433,18 +446,17 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                         if (ipMacTable.get(srcIp) == null) {
                             ipMacTable.put(srcIp, srcMac);
                         }
-                        // Send NA to the original requester
-                        IpAddress dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
 
                         // Firewall whitelist
                         if (!dstIp.equals(myFd70) && !dstIp.equals(ixpFd70) && !dstIp.equals(peerAFd70) &&
                             !dstIp.equals(peerBFd70) && !prefixFd63.contains(dstIp) &&
                             !prefix65xx0v6.contains(dstIp) && !prefix65xx1v6.contains(dstIp)) {
-                            //log.info("[DEBUG] Skip flood for NA: {}", dstIp);
+                            //log.warn("[DEBUG] Skip flood for NA: {}", dstIp);
                             context.block();
                             return; // don't flood, don't handle this ARP
                         }
 
+                        // Send NA to the original requester
                         ConnectPoint requestHost = requestTable.get(dstIp);
                         if (requestHost != null) {
                             sendReply(ethPkt, requestHost.deviceId(), requestHost.port());
@@ -459,6 +471,39 @@ public class AppComponent implements HostProvider { // [CHANGE] Implements HostP
                 }
             }
         }
+    }
+
+    private void installDropRule(DeviceId devId, IpAddress srcIp, IpAddress dstIp, int type) {
+        TrafficSelector.Builder selectorBuilder = DefaultTrafficSelector.builder();
+        if (type == 0) {
+            selectorBuilder.matchEthType(Ethernet.TYPE_ARP)
+                .matchArpSpa(srcIp.getIp4Address())
+                .matchArpTpa(dstIp.getIp4Address());
+        } else if (type == 1) {
+           selectorBuilder.matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_ICMP6)
+                .matchIcmpv6Type(ICMP6.NEIGHBOR_SOLICITATION)
+                .matchIPv6NDTargetAddress(dstIp.getIp6Address());
+        } else if (type == 2) {
+            selectorBuilder.matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_ICMP6)
+                .matchIcmpv6Type(ICMP6.NEIGHBOR_ADVERTISEMENT)
+                .matchIPv6NDTargetAddress(srcIp.getIp6Address());
+        }
+        TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                .drop()
+                .build();
+
+        FlowRule dropRule = DefaultFlowRule.builder()
+                .forDevice(devId)
+                .withSelector(selectorBuilder.build())
+                .withTreatment(treatment)
+                .withPriority(50000)
+                .makePermanent()
+                .fromApp(appId)
+                .build();
+
+        flowRuleService.applyFlowRules(dropRule);
     }
 
     private void sendReply(Ethernet eth, DeviceId devID, PortNumber outPort) {

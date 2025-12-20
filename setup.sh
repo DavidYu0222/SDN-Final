@@ -55,8 +55,8 @@ function create_topology() {
     sudo ip link add veth-h3 mtu 1360 type veth peer name eth-h3 mtu 1360 || true
 
     echo -e "${YELLOW}Connecting veths to OVS...${NC}"
-    sudo ovs-vsctl add-port ovs1 veth-h1 || true
-    sudo ovs-vsctl add-port ovs2 veth-h2 || true
+    sudo ovs-vsctl add-port ovs2 veth-h1 || true
+    sudo ovs-vsctl add-port ovs1 veth-h2 || true
     sudo ovs-vsctl add-port ovs1 veth-ovs1 || true
     sudo ovs-vsctl add-port ovs2 veth-ovs2 || true
     sudo ovs-vsctl add-port ovs1 veth-frr || true
@@ -120,6 +120,40 @@ function create_topology() {
     echo -e "${GREEN}Topology deployed successfully.${NC}"
 }
 
+function web_container() {
+    sudo ip link add veth-web1 mtu 1360 type veth peer name eth-web1 mtu 1360 || true
+    sudo ip link add veth-web2 mtu 1360 type veth peer name eth-web2 mtu 1360 || true
+
+    sudo ovs-vsctl add-port ovs1 veth-web1 || true
+    sudo ovs-vsctl add-port ovs2 veth-web2 || true
+
+    sudo ip link set veth-web1 up
+    sudo ip link set veth-web2 up
+
+    PID1=$(docker inspect -f '{{.State.Pid}}' web1)
+    PID2=$(docker inspect -f '{{.State.Pid}}' web2)
+
+    sudo ip link set eth-web1 netns $PID1
+    sudo ip link set eth-web2 netns $PID2
+
+    sudo nsenter -t $PID1 -n ip link set dev eth-web1 address 00:00:00:10:01:80
+    sudo nsenter -t $PID1 -n ip addr add 172.16.10.80/24 dev eth-web1
+    sudo nsenter -t $PID1 -n ip -6 addr add 2a0b:4e07:c4:10::80/64 dev eth-web1
+    sudo nsenter -t $PID1 -n ip link set eth-web1 up
+
+    sudo nsenter -t $PID2 -n ip link set dev eth-web2 address 00:00:00:10:02:80
+    sudo nsenter -t $PID2 -n ip addr add 172.16.10.80/24 dev eth-web2
+    sudo nsenter -t $PID2 -n ip -6 addr add 2a0b:4e07:c4:10::80/64 dev eth-web2
+    sudo nsenter -t $PID2 -n ip link set eth-web2 up
+
+    sudo nsenter -t $PID1 -n ip route del default 
+    sudo nsenter -t $PID1 -n ip route add default via 172.16.10.1
+    sudo nsenter -t $PID1 -n ip -6 route add default via 2a0b:4e07:c4:10::1
+    sudo nsenter -t $PID2 -n ip route del default 
+    sudo nsenter -t $PID2 -n ip route add default via 172.16.10.1
+    sudo nsenter -t $PID2 -n ip -6 route add default via 2a0b:4e07:c4:10::1
+}
+
 function set_route() {
     echo -e "${GREEN}Set host default route.${NC}"
     docker exec h1 ip route del default 
@@ -181,7 +215,7 @@ function install_proxyndp_app() {
 
     echo -e "${GREEN}proxyndp-app is ACTIVE!${NC}"
 
-    sleep 4
+    sleep 6
     echo -e "${GREEN}Pass config using netcfg.${NC}"
     onos-netcfg localhost ./config/proxyndp.json
     onos-netcfg localhost ./config/WANConnectPoint.json
@@ -211,6 +245,7 @@ function install_proxyndp_app() {
 case "$1" in
     up)
         create_topology
+        web_container
         set_route
         install_proxyndp_app
         install_vrouter_app

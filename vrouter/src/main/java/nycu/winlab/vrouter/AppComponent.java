@@ -69,7 +69,7 @@ import org.onosproject.net.FilteredConnectPoint;
 import org.onosproject.net.intent.IntentService;
 import org.onosproject.net.intent.PointToPointIntent;
 import org.onosproject.net.intent.MultiPointToSinglePointIntent;
-import org.onosproject.net.intent.SinglePointToMultiPointIntent;
+//import org.onosproject.net.intent.SinglePointToMultiPointIntent;
 
 import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.routeservice.RouteService;
@@ -184,35 +184,16 @@ public class AppComponent {
         wanCps.add(wan1);
         wanCps.add(wan2);
 
-        TrafficSelector bgpIpv4SelectorIn = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV4)
-            .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
-            .build();
-
-        TrafficSelector bgpIpv4SelectorOut = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV4)
-            .matchIPProtocol(IPv4.PROTOCOL_TCP)
-            .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
-            .build();
-
-        TrafficSelector bgpIpv6SelectorIn = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV6)
-            .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
-            .build();
-
-        TrafficSelector bgpIpv6SelectorOut = DefaultTrafficSelector.builder()
-            .matchEthType(Ethernet.TYPE_IPV6)
-            .matchIPProtocol(IPv6.PROTOCOL_TCP)
-            .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
-            .build();
-
         MultiPointToSinglePointIntent wan2SpeakerIpv4Intent = MultiPointToSinglePointIntent.builder()
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv4SelectorIn)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPDst(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
@@ -220,31 +201,78 @@ public class AppComponent {
             .appId(appId)
             .filteredIngressPoints(wanCps)
             .filteredEgressPoint(bgpSpeaker)
-            .selector(bgpIpv6SelectorIn)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Dst(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
         intentService.submit(wan2SpeakerIpv4Intent);
         intentService.submit(wan2SpeakerIpv6Intent);
 
-        SinglePointToMultiPointIntent speaker2WanIpv4Intent = SinglePointToMultiPointIntent.builder()
+        PointToPointIntent speaker2Wan1Ipv4Intent = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
-            .filteredEgressPoints(wanCps)
-            .selector(bgpIpv4SelectorOut)
+            .filteredEgressPoint(wan1)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .matchIPDst(IpPrefix.valueOf("192.168.63.2/32"))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        SinglePointToMultiPointIntent speaker2WanIpv6Intent = SinglePointToMultiPointIntent.builder()
+        PointToPointIntent speaker2Wan2Ipv4Intent = PointToPointIntent.builder()
             .appId(appId)
             .filteredIngressPoint(bgpSpeaker)
-            .filteredEgressPoints(wanCps)
-            .selector(bgpIpv6SelectorOut)
+            .filteredEgressPoint(wan2)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchIPProtocol(IPv4.PROTOCOL_TCP)
+                .matchIPSrc(IpPrefix.valueOf(bgpSpeakerIpv4, 32))
+                .matchIPDst(IpPrefix.valueOf("192.168.70.253/32"))
+                .build()
+            )
             .treatment(DefaultTrafficTreatment.builder().build())
             .build();
 
-        intentService.submit(speaker2WanIpv4Intent);
-        intentService.submit(speaker2WanIpv6Intent);
+        PointToPointIntent speaker2Wan1Ipv6Intent = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)
+            .filteredEgressPoint(wan1)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .matchIPv6Dst(IpPrefix.valueOf("fd63::2/128"))
+                .build()
+            )
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        PointToPointIntent speaker2Wan2Ipv6Intent = PointToPointIntent.builder()
+            .appId(appId)
+            .filteredIngressPoint(bgpSpeaker)
+            .filteredEgressPoint(wan2)
+            .selector(DefaultTrafficSelector.builder()
+                .matchEthType(Ethernet.TYPE_IPV6)
+                .matchIPProtocol(IPv6.PROTOCOL_TCP)
+                .matchIPv6Src(IpPrefix.valueOf(bgpSpeakerIpv6, 128))
+                .matchIPv6Dst(IpPrefix.valueOf("fd70::fe/128"))
+                .build()
+            )
+            .treatment(DefaultTrafficTreatment.builder().build())
+            .build();
+
+        intentService.submit(speaker2Wan1Ipv4Intent);
+        intentService.submit(speaker2Wan2Ipv4Intent);
+        intentService.submit(speaker2Wan1Ipv6Intent);
+        intentService.submit(speaker2Wan2Ipv6Intent);
     }
 
     private void installPeerIntent(FilteredConnectPoint peerCP, IpPrefix peerIpv4, IpPrefix peerIpv6) {

@@ -83,6 +83,28 @@ services:
         tail -f /dev/null
       "
 
+  # Web Container attached to OVS1
+  web1:
+    image: traefik/whoami
+    container_name: web1
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=0 
+  
+  # Web Container attached to OVS2
+  web2:
+    image: traefik/whoami
+    container_name: web2
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    sysctls:
+      - net.ipv4.ip_forward=0 
+
 networks:
   labnet:
     driver: bridge

@@ -71,6 +71,7 @@ import org.onosproject.net.intent.PointToPointIntent;
 import org.onosproject.net.intent.MultiPointToSinglePointIntent;
 //import org.onosproject.net.intent.SinglePointToMultiPointIntent;
 
+import org.onosproject.net.intf.Interface;
 import org.onosproject.net.intf.InterfaceService;
 import org.onosproject.routeservice.RouteService;
 import org.onosproject.routeservice.ResolvedRoute;
@@ -376,10 +377,12 @@ public class AppComponent {
         IpPrefix prefix65xx0v6 = IpPrefix.valueOf("2a0b:4e07:c4:12::/64");
         IpPrefix prefix65xx1v6 = IpPrefix.valueOf("2a0b:4e07:c4:112::/64");
 
+        IpAddress defaultGateway = IpAddress.valueOf("192.168.70.253");
+        IpAddress anycastIpv4 = IpAddress.valueOf("172.16.12.80");
+        IpAddress anycastIpv6 = IpAddress.valueOf("2a0b:4e07:c4:12::80");
+
         @Override
         public void process(PacketContext context) {
-            // Stop processing if the packet has been handled, since we
-            // can't do any more to it.
             if (context.isHandled()) {
                 return;
             }
@@ -447,21 +450,16 @@ public class AppComponent {
                     ResolvedRoute route = resolvedRoute.get();
                     IpAddress nextHopIp = route.nextHop();
                     log.info("[Routing] Next Hop IP: {}", nextHopIp);
-                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
-                    if (nextHopMac == null) {
-                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
-                        context.block();
-                        return;
+                    Interface nextHopInterface = interfaceService.getMatchingInterface(nextHopIp);
+                    if (nextHopInterface == null) {
+                        log.warn("[Routing] Next Hop Interface Loss: {} -> send to default gateway", nextHopIp);
+                        nextHopInterface = interfaceService.getMatchingInterface(defaultGateway);
+                        // context.block();
+                        // return;
                     }
-                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
-
-                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
-                    if (nextHopCp == null) {
-                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
-                        context.block();
-                        return;
-                    }
-                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                    MacAddress nextHopMac = nextHopInterface.mac();
+                    ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                    log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", nextHopIp, nextHopMac);
 
                     installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -480,21 +478,34 @@ public class AppComponent {
                 }
             // Any to Intra
             } else if (prefix65xx0.contains(dstIp) || prefix65xx0v6.contains(dstIp)) {
-                MacAddress nextHopMac = interfaceService.getMatchingInterface(dstIp).mac();
-                if (nextHopMac == null) {
-                    log.warn("[Routing] Next Hop Mac Loss: {}", dstIp);
-                    context.block();
-                    return;
+                Interface nextHopInterface = null;
+                if (anycastIpv4.equals(dstIp) || anycastIpv6.equals(dstIp)) {
+                    Set<Interface> anycastInterfaces = interfaceService.getInterfacesByIp(dstIp);
+                    if (recDevId.equals(ovs1)) {
+                        // If we are at OVS1, strictly pick the interface attached to OVS1
+                        nextHopInterface = anycastInterfaces.stream()
+                            .filter(intf -> intf.connectPoint().deviceId().equals(ovs1))
+                            .findFirst()
+                            .orElse(null);
+                    } else {
+                        // If we are at OVS2, strictly pick the interface attached to OVS2
+                        nextHopInterface = anycastInterfaces.stream()
+                            .filter(intf -> intf.connectPoint().deviceId().equals(ovs2))
+                            .findFirst()
+                            .orElse(null);
+                    }
+                } else {
+                    nextHopInterface = interfaceService.getMatchingInterface(dstIp);
                 }
-                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
 
-                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(dstIp).connectPoint();
-                if (nextHopCp == null) {
-                    log.warn("[Routing] Next Hop Cp Loss: {}", dstIp);
+                if (nextHopInterface == null) {
+                    log.warn("[Routing] Next Hop Interface Loss: {}", dstIp);
                     context.block();
                     return;
                 }
-                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                MacAddress nextHopMac = nextHopInterface.mac();
+                ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", dstIp, nextHopMac);
 
                 installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -508,12 +519,9 @@ public class AppComponent {
                 ));
             // AS65xx1 to inter
             } else if (prefix65xx1.contains(srcIp) || prefix65xx1v6.contains(srcIp)) {
-                IpAddress defaultIp = IpAddress.valueOf("192.168.70.253");
-                MacAddress nextHopMac = interfaceService.getMatchingInterface(defaultIp).mac();
-                log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, dstIp, nextHopMac);
-
-                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(defaultIp).connectPoint();
-                log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
+                MacAddress nextHopMac = interfaceService.getMatchingInterface(defaultGateway).mac();
+                ConnectPoint nextHopCp = interfaceService.getMatchingInterface(defaultGateway).connectPoint();
+                log.info("[Routing] ROUTE FOUND → next-hop = {} {}", dstIp, nextHopMac);
 
                 installPath(recvCp, nextHopCp, context, nextHopMac);
 
@@ -532,23 +540,16 @@ public class AppComponent {
                     ResolvedRoute route = resolvedRoute.get();
                     IpAddress nextHopIp = route.nextHop();
                     log.info("[Routing] Next Hop IP: {}", nextHopIp);
-                    MacAddress nextHopMac = interfaceService.getMatchingInterface(nextHopIp).mac();
-                    if (nextHopMac == null) {
-                        log.warn("[Routing] Next Hop Mac Loss: {}", nextHopIp);
+                    Interface nextHopInterface = interfaceService.getMatchingInterface(nextHopIp);
+                    if (nextHopInterface == null) {
                         context.block();
                         return;
                     }
-                    log.info("[Routing] ROUTE FOUND: {} → next-hop = {} {}", dstIp, nextHopIp, nextHopMac);
+                    MacAddress nextHopMac = nextHopInterface.mac();
+                    ConnectPoint nextHopCp = nextHopInterface.connectPoint();
+                    log.info("[Routing] ROUTE FOUND: → next-hop = {} {}", nextHopIp, nextHopMac);
 
-                    ConnectPoint nextHopCp = interfaceService.getMatchingInterface(nextHopIp).connectPoint();
-                    if (nextHopCp == null) {
-                        log.warn("[Routing] Next Hop Cp Loss: {}", nextHopIp);
-                        context.block();
-                        return;
-                    }
-                    log.info("[Routing] Next Hop Cp Found: {}", nextHopCp);
-
-                    installPath(recvCp, nextHopCp, context, nextHopMac); // dstMac = vrouterMac
+                    installPath(recvCp, nextHopCp, context, nextHopMac);
 
                     // Emit packet
                     ethPkt.setSourceMACAddress(vrouterMac);

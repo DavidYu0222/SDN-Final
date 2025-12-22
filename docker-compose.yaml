@@ -86,6 +86,7 @@ services:
   # Web Container attached to OVS1
   web1:
     image: traefik/whoami
+    hostname: stu12_web1
     container_name: web1
     privileged: true
     cap_add:
@@ -97,6 +98,7 @@ services:
   # Web Container attached to OVS2
   web2:
     image: traefik/whoami
+    hostname: stu12_web2
     container_name: web2
     privileged: true
     cap_add:

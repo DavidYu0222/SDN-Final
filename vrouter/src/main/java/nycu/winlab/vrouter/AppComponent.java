@@ -403,24 +403,6 @@ public class AppComponent {
             if (ethPkt.getEtherType() == Ethernet.TYPE_ARP) {
                 return;
             }
-            if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
-                IPv6 ipv6 = (IPv6) ethPkt.getPayload();
-                // Block fd63::/64 from outside
-                IpAddress srcIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
-                IpAddress dstIp63 = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
-                if ((prefixFd63.contains(srcIp63) || prefixFd63.contains(dstIp63)) && !recDevId.equals(ovs1)) {
-                    // log.info("[Tag] Skip flood for IPv6: {} -> {} on {}", srcIp63, dstIp63, recDevId);
-                    context.block();
-                    return; // don't flood, don't handle this IPv6
-                }
-                if (ipv6.getNextHeader() == IPv6.PROTOCOL_ICMP6) {
-                    ICMP6 icmp6 = (ICMP6) ipv6.getPayload();
-                    byte icmpType = icmp6.getIcmpType();
-                    if (icmpType == ICMP6.NEIGHBOR_SOLICITATION || icmpType == ICMP6.NEIGHBOR_ADVERTISEMENT) {
-                        return;
-                    }
-                }
-            }
 
             IpAddress srcIp = null;
             IpAddress dstIp = null;
@@ -429,17 +411,29 @@ public class AppComponent {
                 if (ipv4 != null) {
                     srcIp = IpAddress.valueOf(ipv4.getSourceAddress());
                     dstIp = IpAddress.valueOf(ipv4.getDestinationAddress());
+                    if ((prefix63.contains(srcIp) || prefix63.contains(dstIp)) && !recDevId.equals(ovs1)) {
+                        context.block();
+                        return; // don't flood, don't handle this IPv6
+                    }
                 }
             } else if (ethPkt.getEtherType() == Ethernet.TYPE_IPV6) {
                 IPv6 ipv6 = (IPv6) ethPkt.getPayload();
                 if (ipv6 != null) {
                     srcIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getSourceAddress());
                     dstIp = IpAddress.valueOf(IpAddress.Version.INET6, ipv6.getDestinationAddress());
+                    if ((prefixFd63.contains(srcIp) || prefixFd63.contains(dstIp)) && !recDevId.equals(ovs1)) {
+                        context.block();
+                        return; // don't flood, don't handle this IPv6
+                    }
+                    // This handle by ProxyNdp App
+                    if (ipv6.getNextHeader() == IPv6.PROTOCOL_ICMP6) {
+                        ICMP6 icmp6 = (ICMP6) ipv6.getPayload();
+                        byte icmpType = icmp6.getIcmpType();
+                        if (icmpType == ICMP6.NEIGHBOR_SOLICITATION || icmpType == ICMP6.NEIGHBOR_ADVERTISEMENT) {
+                            return;
+                        }
+                    }
                 }
-            }
-
-            if (dstIp == null) {
-                return;
             }
 
             // Intra to Inter
